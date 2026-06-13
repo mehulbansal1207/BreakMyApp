@@ -1,0 +1,112 @@
+import os
+import json
+import logging
+import subprocess
+from typing import Dict, Any
+
+logger = logging.getLogger(__name__)
+
+SEVERITY_MAP = {
+    "ERROR": "HIGH",
+    "WARNING": "MEDIUM",
+    "INFO": "LOW"
+}
+
+
+def scan_semgrep(repo_path: str) -> Dict[str, Any]:
+    """
+    Scans a repository for code quality and security issues using Semgrep.
+
+    Runs Semgrep with the auto config (free community ruleset) against the
+    given repository path and returns structured findings with mapped
+    severity levels.
+
+    Args:
+        repo_path (str): Absolute path to the cloned repository to scan.
+
+    Returns:
+        dict: A dictionary containing the scan tool name, status, findings
+              count, a list of individual findings, and any error message.
+              Always returns this structure even on failure.
+    """
+    result = {
+        "tool": "semgrep",
+        "status": "failed",
+        "findings_count": 0,
+        "findings": [],
+        "error": None
+    }
+
+    try:
+        logger.info(f"Starting Semgrep scan on {repo_path}")
+        process = subprocess.run(
+            [
+                "semgrep", "scan", repo_path,
+                "--config", "auto",
+                "--json",
+                "--no-rewrite-rule-ids",
+                "--timeout", "60",
+                "--max-memory", "512",
+                "--quiet"
+            ],
+            capture_output=True,
+            text=True,
+            timeout=180
+        )
+
+        try:
+            output = json.loads(process.stdout)
+        except json.JSONDecodeError:
+            logger.error("Failed to parse Semgrep JSON output.")
+            result["error"] = "Failed to parse Semgrep output as JSON"
+            return result
+
+        errors = output.get("errors", [])
+        if errors:
+            for err in errors:
+                logger.warning(f"Semgrep reported error: {err}")
+
+        results_list = output.get("results", [])
+
+        # Normalise repo_path so stripping works consistently
+        repo_prefix = repo_path.rstrip(os.sep) + os.sep
+
+        for item in results_list:
+            raw_severity = item.get("extra", {}).get("severity", "")
+            mapped_severity = SEVERITY_MAP.get(raw_severity, "LOW")
+
+            raw_path = item.get("path", "")
+            if raw_path.startswith(repo_prefix):
+                relative_path = raw_path[len(repo_prefix):]
+            else:
+                relative_path = raw_path
+
+            metadata = item.get("extra", {}).get("metadata", {})
+
+            finding = {
+                "severity": mapped_severity,
+                "rule_id": item.get("check_id", "unknown"),
+                "message": item.get("extra", {}).get("message", ""),
+                "file": relative_path,
+                "line_start": item.get("start", {}).get("line", 0),
+                "line_end": item.get("end", {}).get("line", 0),
+                "category": metadata.get("category", "general"),
+                "cwe": metadata.get("cwe", [])
+            }
+            result["findings"].append(finding)
+
+        result["status"] = "completed"
+        result["findings_count"] = len(result["findings"])
+        logger.info(f"Semgrep scan completed. Found {result['findings_count']} issues.")
+
+    except subprocess.TimeoutExpired:
+        logger.error(f"Semgrep scan timed out for {repo_path}")
+        result["error"] = "Semgrep scan timed out after 180 seconds"
+    except FileNotFoundError:
+        logger.error("Semgrep binary not found")
+        result["error"] = "semgrep binary not found or not installed"
+    except Exception as e:
+        logger.error(f"Unexpected error running Semgrep: {e}")
+        result["error"] = str(e)
+
+    return result
