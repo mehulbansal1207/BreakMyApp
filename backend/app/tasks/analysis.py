@@ -9,6 +9,7 @@ from app.models.scan import Scan
 from app.services.repo_handler import clone_repo, cleanup_repo, get_repo_info
 from app.services.scanners.secrets_scanner import scan_secrets
 from app.services.scanners.semgrep_scanner import scan_semgrep
+from app.services.scanners.bandit_scanner import scan_bandit
 
 
 logger = logging.getLogger(__name__)
@@ -55,11 +56,13 @@ async def _run_full_analysis(scan_id: str) -> None:
             repo_info = get_repo_info(repo_path)
             secrets = scan_secrets(repo_path)
             semgrep = scan_semgrep(repo_path)
+            bandit = scan_bandit(repo_path)
 
             findings = {
                 "repo_info": repo_info,
                 "secrets": secrets,
-                "semgrep": semgrep
+                "semgrep": semgrep,
+                "bandit": bandit
             }
 
             score = 100
@@ -71,7 +74,7 @@ async def _run_full_analysis(scan_id: str) -> None:
                     score -= 10
                 elif severity == "MEDIUM":
                     score -= 5
-                    
+
             for finding in semgrep.get("findings", []):
                 severity = finding.get("severity", "")
                 if severity == "HIGH":
@@ -80,7 +83,16 @@ async def _run_full_analysis(scan_id: str) -> None:
                     score -= 5
                 elif severity == "LOW":
                     score -= 2
-                    
+
+            for finding in bandit.get("findings", []):
+                severity = finding.get("severity", "")
+                if severity == "HIGH":
+                    score -= 10
+                elif severity == "MEDIUM":
+                    score -= 5
+                elif severity == "LOW":
+                    score -= 2
+
             score = max(0, score)
 
         except RuntimeError as e:
