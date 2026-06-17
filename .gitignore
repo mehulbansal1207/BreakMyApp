@@ -1,0 +1,59 @@
+# Environment files — NEVER commit these
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Docker
+docker-compose.override.yml
+
+# Database volumes
+postgres_data/
+redis_data/
+minio_data/
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node
+node_modules/
+.next/
+npm-debug.log*
+
+# Temp files created by scanners
+/tmp/breakmyapp_*
+
+# Scanner and Tool Caches
+backend/.semgrep/
+backend/.cache/
+.semgrep/
+.cache/
