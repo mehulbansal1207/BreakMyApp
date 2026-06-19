@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     MINIO_ACCESS_KEY: str
     MINIO_SECRET_KEY: str
     ENVIRONMENT: str = "development"
+    GEMINI_API_KEY: str = ""  
 
 # Global configurations instance
 settings = Settings()

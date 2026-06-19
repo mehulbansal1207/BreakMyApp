@@ -11,6 +11,7 @@ from app.services.scanners.secrets_scanner import scan_secrets
 from app.services.scanners.semgrep_scanner import scan_semgrep
 from app.services.scanners.bandit_scanner import scan_bandit
 from app.services.scanners.dependency_scanner import scan_dependencies
+from app.services.ai_explainer import explain_findings
 
 
 logger = logging.getLogger(__name__)
@@ -108,6 +109,9 @@ async def _run_full_analysis(scan_id: str) -> None:
                     score -= 2
 
             score = max(0, score)
+
+            ai_explanation = explain_findings(findings, score)
+            findings["ai_explanation"] = ai_explanation
 
         except RuntimeError as e:
             logger.error(f"Analysis failed for scan {scan_id}: {e}")
