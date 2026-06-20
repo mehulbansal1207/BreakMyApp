@@ -28,17 +28,17 @@ export default function FindingCard({
   );
 
   return (
-    <div className="bg-gray-800/50 rounded-lg px-4 py-3 border border-gray-700/50 hover:bg-gray-800 transition-colors flex flex-row items-start gap-3 flex-wrap">
+    <div className="bg-gray-800/50 rounded-lg px-4 py-3 border border-gray-700/50 hover:bg-gray-800 transition-colors flex flex-row items-start gap-3">
       <div className={badgeClasses}>{severity}</div>
 
-      <div className="flex-1 min-w-0 space-y-1">
+      <div className="flex-1 min-w-0 space-y-1 overflow-hidden">
         <div className="font-mono text-sm text-gray-300 break-all">
           {file}
           {line !== undefined && (
             <span className="text-gray-500">:{line}</span>
           )}
         </div>
-        <p className="text-sm text-gray-400 break-words">{message}</p>
+        <p className="text-sm text-gray-400 break-words whitespace-normal">{message}</p>
       </div>
 
       {extra && Object.keys(extra).length > 0 && (
