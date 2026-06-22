@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.database import Base, engine
 from app.api.v1.routes import scans
+from app.api.v1.routes import github
 import app.models.scan
 
 @asynccontextmanager
@@ -31,6 +32,7 @@ app.add_middleware(
 )
 
 app.include_router(scans.router, prefix="/api/v1")
+app.include_router(github.router, prefix="/api/v1")
 
 @app.get("/health")
 def health_check():

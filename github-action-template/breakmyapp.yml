@@ -1,0 +1,107 @@
+name: BreakMyApp Security Scan
+
+# Triggers on pull requests targeting main or master
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+
+    steps:
+      # Step 1: Check out the repository code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Start the BreakMyApp scan by POSTing the repo URL
+      # The response contains the scan_id we'll use to poll for results
+      - name: Start BreakMyApp scan
+        id: start_scan
+        run: |
+          REPO_URL="${{ github.server_url }}/${{ github.repository }}"
+          echo "Starting scan for: $REPO_URL"
+
+          RESPONSE=$(curl -sf -X POST \
+            "https://breakmyapp-production-2ec7.up.railway.app/api/v1/scans/" \
+            -H "Content-Type: application/json" \
+            -d "{\"repo_url\": \"$REPO_URL\"}")
+
+          SCAN_ID=$(echo "$RESPONSE" | jq -r '.id')
+          echo "Scan started with ID: $SCAN_ID"
+          echo "scan_id=$SCAN_ID" >> "$GITHUB_OUTPUT"
+
+      # Step 3: Poll until the scan is complete (or times out after 20 minutes)
+      # Checks every 10 seconds and exits once status is no longer pending/running
+      - name: Wait for scan to complete
+        id: wait_scan
+        run: |
+          SCAN_ID="${{ steps.start_scan.outputs.scan_id }}"
+          MAX_ATTEMPTS=120
+          ATTEMPT=0
+
+          echo "Polling scan status for ID: $SCAN_ID"
+
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            SUMMARY=$(curl -sf \
+              "https://breakmyapp-production-2ec7.up.railway.app/api/v1/scans/$SCAN_ID/summary")
+
+            STATUS=$(echo "$SUMMARY" | jq -r '.status')
+            echo "Attempt $((ATTEMPT + 1))/$MAX_ATTEMPTS — status: $STATUS"
+
+            if [ "$STATUS" != "pending" ] && [ "$STATUS" != "running" ]; then
+              echo "Scan finished with status: $STATUS"
+              echo "summary=$SUMMARY" >> "$GITHUB_OUTPUT"
+              break
+            fi
+
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 10
+          done
+
+          if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
+            echo "Timed out waiting for scan to complete after 20 minutes."
+            exit 1
+          fi
+
+      # Step 4: Post a PR comment and create GitHub Issues for critical findings
+      # Only runs on pull_request events where a PR number is available
+      - name: Post GitHub report
+        if: github.event_name == 'pull_request' && github.event.pull_request.number != ''
+        run: |
+          SCAN_ID="${{ steps.start_scan.outputs.scan_id }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+
+          echo "Posting GitHub report for PR #$PR_NUMBER"
+
+          curl -sf -X POST \
+            "https://breakmyapp-production-2ec7.up.railway.app/api/v1/github/report/$SCAN_ID" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"token\": \"${{ secrets.BREAKMYAPP_TOKEN }}\",
+              \"owner\": \"${{ github.repository_owner }}\",
+              \"repo\": \"${{ github.event.repository.name }}\",
+              \"pr_number\": $PR_NUMBER
+            }"
+
+      # Step 5: Always print the score and report link to the Action logs
+      - name: Print scan summary
+        if: always()
+        run: |
+          SUMMARY='${{ steps.wait_scan.outputs.summary }}'
+          if [ -n "$SUMMARY" ]; then
+            SCORE=$(echo "$SUMMARY" | jq -r '.score // "N/A"')
+            REPORT_URL=$(echo "$SUMMARY" | jq -r '.report_url // "N/A"')
+            echo "============================================"
+            echo "  BreakMyApp Scan Complete"
+            echo "  Score:  $SCORE / 100"
+            echo "  Report: $REPORT_URL"
+            echo "============================================"
+          else
+            echo "No summary available (scan may have timed out)."
+          fi

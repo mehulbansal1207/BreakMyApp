@@ -139,6 +139,12 @@ export default function Home() {
         >
           View scan history →
         </Link>
+        <Link
+          href="/docs/github-action"
+          className="text-sm text-gray-500 hover:text-gray-400 transition text-center block mt-2"
+        >
+          GitHub Action docs →
+        </Link>
       </div>
     </main>
   );
