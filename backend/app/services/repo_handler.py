@@ -42,7 +42,28 @@ def clone_repo(repo_url: str) -> str:
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed to clone {repo_url}. Error: {e.stderr}")
         cleanup_repo(target_dir)
-        raise RuntimeError(f"Failed to clone {repo_url}: {e.stderr}") from e
+        stderr_msg = e.stderr or ""
+        if "Repository not found" in stderr_msg or "does not exist" in stderr_msg or "not found" in stderr_msg:
+            raise RuntimeError(
+                "Repository not found. Please check the URL is correct and "
+                "the repository is public."
+            )
+        elif "Authentication failed" in stderr_msg or "could not read Username" in stderr_msg or "terminal prompts disabled" in stderr_msg:
+            raise RuntimeError(
+                "This repository is private. BreakMyApp can only scan "
+                "public repositories."
+            )
+        elif "Connection refused" in stderr_msg or "Could not resolve host" in stderr_msg or "Failed to connect" in stderr_msg:
+            raise RuntimeError(
+                "Could not connect to GitHub. Please check the URL and "
+                "try again."
+            )
+        else:
+            raise RuntimeError(
+                f"Failed to clone repository. Please ensure the URL is "
+                f"correct and the repository is public. "
+                f"Details: {stderr_msg[:200]}"
+            )
     except Exception as e:
         logger.error(f"Unexpected error while cloning {repo_url}: {e}")
         cleanup_repo(target_dir)

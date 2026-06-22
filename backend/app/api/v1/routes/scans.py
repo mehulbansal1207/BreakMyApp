@@ -1,5 +1,5 @@
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -7,11 +7,15 @@ from app.core.database import get_db
 from app.models.scan import Scan
 from app.schemas.scan import ScanCreate, ScanResponse
 from app.tasks.analysis import run_analysis
+from app.core.limiter import check_rate_limit
 
 router = APIRouter(prefix="/scans", tags=["scans"])
 
 @router.post("/", response_model=ScanResponse, status_code=status.HTTP_201_CREATED)
-async def create_scan(scan_in: ScanCreate, db: AsyncSession = Depends(get_db)):
+async def create_scan(request: Request, scan_in: ScanCreate, db: AsyncSession = Depends(get_db)):
+    ip = request.client.host if request.client else "unknown"
+    await check_rate_limit(ip)
+
     new_scan = Scan(
         repo_url=scan_in.repo_url,
         status="pending"
@@ -23,6 +27,15 @@ async def create_scan(scan_in: ScanCreate, db: AsyncSession = Depends(get_db)):
     run_analysis.delay(str(new_scan.id))
 
     return new_scan
+
+@router.get("/", response_model=list[ScanResponse])
+async def list_scans(
+    limit: int = Query(default=20, ge=1, le=50),
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(select(Scan).order_by(Scan.created_at.desc()).limit(limit))
+    scans = result.scalars().all()
+    return scans
 
 @router.get("/{scan_id}", response_model=ScanResponse)
 async def get_scan(scan_id: UUID, db: AsyncSession = Depends(get_db)):

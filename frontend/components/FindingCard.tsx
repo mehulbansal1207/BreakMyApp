@@ -28,28 +28,30 @@ export default function FindingCard({
   );
 
   return (
-    <div className="bg-gray-800/50 rounded-lg px-4 py-3 border border-gray-700/50 hover:bg-gray-800 transition-colors flex flex-col gap-3 sm:flex-row sm:items-start">
+    <div className="bg-gray-800/50 rounded-lg px-4 py-3 border border-gray-700/50 hover:bg-gray-800 transition-colors flex flex-row items-start gap-3">
       <div className={badgeClasses}>{severity}</div>
 
-      <div className="flex-1 min-w-0 space-y-1">
-        <div className="font-mono text-sm text-gray-300 truncate">
+      <div className="flex-1 min-w-0 space-y-1 overflow-hidden">
+        <div className="font-mono text-sm text-gray-300 break-all">
           {file}
           {line !== undefined && (
             <span className="text-gray-500">:{line}</span>
           )}
         </div>
-        <p className="text-sm text-gray-400 break-words">{message}</p>
+        <p className="text-sm text-gray-400 break-words whitespace-normal">
+          {message}
+        </p>
       </div>
 
       {extra && Object.keys(extra).length > 0 && (
-        <div className="flex flex-wrap gap-2 shrink-0 sm:flex-col sm:items-end">
+        <div className="flex flex-wrap gap-2 shrink-0">
           {Object.entries(extra).map(([key, value]) => (
             <div
               key={key}
               className="inline-flex items-center px-2 py-1 rounded-md bg-gray-900 border border-gray-700 text-xs text-gray-400"
             >
               <span className="font-medium mr-1 text-gray-500">{key}:</span>
-              <span className="font-mono text-gray-300">{value}</span>
+              <span className="font-mono text-gray-300 break-all">{value}</span>
             </div>
           ))}
         </div>

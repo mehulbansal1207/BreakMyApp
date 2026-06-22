@@ -2,8 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Base styles ─────────────────────────────────────────────────────────── */
-
 html,
 body {
   height: 100%;
@@ -12,8 +10,6 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
-
-/* ── Dark scrollbar – WebKit (Chrome, Edge, Safari) ──────────────────────── */
 
 ::-webkit-scrollbar {
   width: 8px;
@@ -32,8 +28,6 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #818cf8;
 }
-
-/* ── Dark scrollbar – Firefox ────────────────────────────────────────────── */
 
 * {
   scrollbar-width: thin;

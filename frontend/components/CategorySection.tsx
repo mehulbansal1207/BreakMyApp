@@ -20,12 +20,10 @@ export default function CategorySection({
   children,
   defaultOpen,
 }: CategorySectionProps) {
-  // Default open if there are findings or if explicitly requested
   const [isOpen, setIsOpen] = useState(defaultOpen ?? findingsCount > 0);
 
   return (
     <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
-      {/* Header section (clickable) */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex items-center justify-between p-6 bg-gray-900 hover:bg-gray-800/80 transition-colors text-left"
@@ -45,7 +43,6 @@ export default function CategorySection({
           </span>
         </div>
 
-        {/* Chevron */}
         <div
           className={clsx(
             "text-gray-500 transition-transform duration-300 transform",
@@ -68,7 +65,6 @@ export default function CategorySection({
         </div>
       </button>
 
-      {/* Collapsible Content */}
       <div
         className={clsx(
           "transition-all duration-300 ease-in-out px-6",
@@ -78,14 +74,11 @@ export default function CategorySection({
         )}
       >
         <div className="space-y-6 pt-2 border-t border-gray-800">
-          {/* AI Summary */}
           {aiSummary && (
             <p className="border-l-2 border-indigo-500/50 pl-3 italic text-gray-400 text-sm">
               {aiSummary}
             </p>
           )}
-
-          {/* Children (Findings or Empty State) */}
           <div className="space-y-3">{children}</div>
         </div>
       </div>

@@ -1,9 +1,3 @@
-// ---------------------------------------------------------------------------
-// BreakMyApp – TypeScript interfaces for the backend API response
-// ---------------------------------------------------------------------------
-
-/* ── Repository metadata ─────────────────────────────────────────────────── */
-
 export interface RepoInfo {
   languages: string[];
   has_python: boolean;
@@ -17,8 +11,6 @@ export interface RepoInfo {
   total_files: number;
   repo_size_mb: number;
 }
-
-/* ── Secrets (TruffleHog) ────────────────────────────────────────────────── */
 
 export interface SecretsFinding {
   severity: "CRITICAL";
@@ -36,8 +28,6 @@ export interface SecretsResult {
   findings: SecretsFinding[];
   error: string | null;
 }
-
-/* ── Static analysis (Semgrep) ───────────────────────────────────────────── */
 
 export interface SemgrepFinding {
   severity: "HIGH" | "MEDIUM" | "LOW";
@@ -58,8 +48,6 @@ export interface SemgrepResult {
   error: string | null;
 }
 
-/* ── Python linting (Bandit) ─────────────────────────────────────────────── */
-
 export interface BanditFinding {
   severity: "HIGH" | "MEDIUM" | "LOW";
   confidence: "HIGH" | "MEDIUM" | "LOW";
@@ -77,8 +65,6 @@ export interface BanditResult {
   findings: BanditFinding[];
   error: string | null;
 }
-
-/* ── Dependency scanning ─────────────────────────────────────────────────── */
 
 export interface DependencyFinding {
   severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
@@ -106,8 +92,6 @@ export interface DependenciesResult {
   error: string | null;
 }
 
-/* ── AI explanation layer ────────────────────────────────────────────────── */
-
 export interface AiPriority {
   priority: number;
   title: string;
@@ -133,8 +117,6 @@ export interface AiExplanation {
   error: string | null;
 }
 
-/* ── Aggregated findings ─────────────────────────────────────────────────── */
-
 export interface Findings {
   repo_info: RepoInfo;
   secrets: SecretsResult;
@@ -143,8 +125,6 @@ export interface Findings {
   dependencies: DependenciesResult;
   ai_explanation: AiExplanation;
 }
-
-/* ── Top-level scan response ─────────────────────────────────────────────── */
 
 export interface ScanResponse {
   id: string;

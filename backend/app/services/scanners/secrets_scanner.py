@@ -25,9 +25,21 @@ def scan_secrets(repo_path: str) -> Dict[str, Any]:
     }
     
     try:
-        # Run trufflehog without check=True because it may return non-zero exit code if secrets are found
+        exclude_patterns = "\n".join([
+            ".npm",
+            "node_modules",
+            ".git",
+            "__pycache__",
+            r".*\.pyc"
+        ])
         process = subprocess.run(
-            ["trufflehog", "filesystem", repo_path, "--json", "--no-update"],
+            [
+                "trufflehog", "filesystem", repo_path,
+                "--json",
+                "--no-update",
+                "--exclude-paths", "/dev/stdin"
+            ],
+            input=exclude_patterns,
             capture_output=True,
             text=True,
             timeout=120

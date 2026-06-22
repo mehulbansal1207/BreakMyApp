@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { createScan } from "@/lib/api";
 
 const EXAMPLES = [
@@ -25,10 +26,12 @@ export default function Home() {
       return;
     }
 
-    // Basic GitHub URL validation
-    const githubRegex = /^https?:\/\/(www\.)?github\.com\/[\w.-]+\/[\w.-]+$/i;
+    const githubRegex =
+      /^https?:\/\/(www\.)?github\.com\/[\w.-]+\/[\w.-]+$/i;
     if (!githubRegex.test(url)) {
-      setError("Please enter a valid GitHub repository URL (e.g., https://github.com/user/repo).");
+      setError(
+        "Please enter a valid GitHub repository URL (e.g., https://github.com/user/repo)."
+      );
       return;
     }
 
@@ -36,8 +39,10 @@ export default function Home() {
     try {
       const scan = await createScan(url);
       router.push(`/scan/${scan.id}`);
-    } catch (err: any) {
-      setError(err.message || "Failed to start scan. Please try again.");
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Failed to start scan.";
+      setError(message);
       setIsLoading(false);
     }
   };
@@ -98,12 +103,12 @@ export default function Home() {
                   r="10"
                   stroke="currentColor"
                   strokeWidth="4"
-                ></circle>
+                />
                 <path
                   className="opacity-75"
                   fill="currentColor"
                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                ></path>
+                />
               </svg>
             )}
             {isLoading ? "Analyzing..." : "Analyze Repository"}
@@ -127,6 +132,13 @@ export default function Home() {
             ))}
           </div>
         </div>
+
+        <Link
+          href="/history"
+          className="text-sm text-gray-500 hover:text-gray-400 transition text-center block mt-4"
+        >
+          View scan history →
+        </Link>
       </div>
     </main>
   );

@@ -14,37 +14,30 @@ export default function StatusPoller({ scanId }: { scanId: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    let timeoutId: NodeJS.Timeout;
+    let timeoutId: ReturnType<typeof setTimeout>;
 
     const poll = async () => {
       try {
         const data = await getScan(scanId);
         if (cancelled) return;
-
         setScan(data);
-
-        // Stop polling if completed or failed
-        if (data.status === "completed" || data.status === "failed") {
-          return;
-        }
-
-        // Continue polling
+        if (data.status === "completed" || data.status === "failed") return;
         timeoutId = setTimeout(poll, 2000);
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (cancelled) return;
-        setError(err.message || "Failed to fetch scan status.");
+        const msg =
+          err instanceof Error ? err.message : "Failed to fetch scan status.";
+        setError(msg);
       }
     };
 
     poll();
-
     return () => {
       cancelled = true;
       clearTimeout(timeoutId);
     };
   }, [scanId]);
 
-  // State 1: Initializing
   if (!scan && !error) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen space-y-4">
@@ -54,7 +47,6 @@ export default function StatusPoller({ scanId }: { scanId: string }) {
     );
   }
 
-  // State 2: Fetch Error
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-6">
@@ -72,16 +64,14 @@ export default function StatusPoller({ scanId }: { scanId: string }) {
     );
   }
 
-  // State 3: Pending or Running
   if (scan?.status === "pending" || scan?.status === "running") {
     const statusMsg =
       scan.status === "pending"
         ? "Cloning repository..."
         : "Running security scanners...";
-
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-6">
-        <div className="bg-gray-900 border border-indigo-500/20 rounded-xl p-10 max-w-lg w-full text-center space-y-6 shadow-2xl shadow-brand/10">
+        <div className="bg-gray-900 border border-indigo-500/20 rounded-xl p-10 max-w-lg w-full text-center space-y-6 shadow-2xl">
           <div className="flex justify-center text-brand">
             <Spinner size="w-12 h-12" />
           </div>
@@ -97,7 +87,6 @@ export default function StatusPoller({ scanId }: { scanId: string }) {
     );
   }
 
-  // State 4: Failed
   if (scan?.status === "failed") {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-6">
@@ -118,15 +107,13 @@ export default function StatusPoller({ scanId }: { scanId: string }) {
     );
   }
 
-  // State 5: Completed
-  if (!scan?.findings) return null; // Should not happen if completed
+  if (!scan?.findings) return null;
   const { findings, score } = scan;
   const ai = findings.ai_explanation;
   const repo = findings.repo_info;
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-10 space-y-12">
-      {/* Header / Nav */}
       <div>
         <Link
           href="/"
@@ -137,7 +124,36 @@ export default function StatusPoller({ scanId }: { scanId: string }) {
         <h1 className="text-2xl font-bold mt-6 break-all">{scan.repo_url}</h1>
       </div>
 
-      {/* Hero: Score + AI Exec Summary */}
+      {score === 0 && (
+        <div className="w-full bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex gap-3">
+          <svg
+            className="w-5 h-5 text-amber-400 shrink-0"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+            />
+          </svg>
+          <div>
+            <h4 className="text-amber-400 font-semibold text-sm">
+              {"Score of 0 — Here's why"}
+            </h4>
+            <p className="text-amber-300/80 text-sm">
+              A score of 0 typically means critical secrets or credentials were
+              detected in your repository. Each critical secret deducts 20 points.
+              Review the Secrets & Credentials section below and rotate any exposed
+              credentials immediately.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row gap-8 items-center md:items-start bg-gray-900 border border-gray-800 rounded-2xl p-8">
         <div className="shrink-0">
           <ScoreRing score={score || 0} size={220} />
@@ -155,7 +171,6 @@ export default function StatusPoller({ scanId }: { scanId: string }) {
         </div>
       </div>
 
-      {/* Top Priorities */}
       {ai.top_priorities && ai.top_priorities.length > 0 && (
         <div className="space-y-6">
           <h3 className="text-2xl font-bold">Top Priorities</h3>
@@ -189,12 +204,9 @@ export default function StatusPoller({ scanId }: { scanId: string }) {
         </div>
       )}
 
-      {/* Repo Info Badges */}
       <div className="flex flex-wrap gap-3">
         {repo.languages.map((l) => (
-          <Badge key={l} color="indigo">
-            {l}
-          </Badge>
+          <Badge key={l} color="indigo">{l}</Badge>
         ))}
         {repo.has_tests || repo.has_ci ? (
           <Badge color="green">Tests/CI Found</Badge>
@@ -210,15 +222,18 @@ export default function StatusPoller({ scanId }: { scanId: string }) {
         <Badge color="gray">{repo.repo_size_mb.toFixed(2)} MB</Badge>
       </div>
 
-      {/* Categories */}
       <div className="space-y-4">
         <h3 className="text-2xl font-bold pb-2">Detailed Findings</h3>
 
-        {/* 1. Secrets */}
         <CategorySection
           title="Secrets & Credentials"
           findingsCount={findings.secrets.findings_count}
           aiSummary={ai.category_summaries.secrets}
+          icon={
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+            </svg>
+          }
         >
           {findings.secrets.findings_count === 0 ? (
             <NoIssues />
@@ -236,11 +251,15 @@ export default function StatusPoller({ scanId }: { scanId: string }) {
           )}
         </CategorySection>
 
-        {/* 2. Security (Semgrep) */}
         <CategorySection
           title="Static Security (SAST)"
           findingsCount={findings.semgrep.findings_count}
           aiSummary={ai.category_summaries.security}
+          icon={
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+          }
         >
           {findings.semgrep.findings_count === 0 ? (
             <NoIssues />
@@ -258,11 +277,15 @@ export default function StatusPoller({ scanId }: { scanId: string }) {
           )}
         </CategorySection>
 
-        {/* 3. Code Quality (Bandit) */}
         <CategorySection
           title="Code Quality & Linting"
           findingsCount={findings.bandit.findings_count}
           aiSummary={ai.category_summaries.code_quality}
+          icon={
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+            </svg>
+          }
         >
           {findings.bandit.findings_count === 0 ? (
             <NoIssues />
@@ -280,11 +303,15 @@ export default function StatusPoller({ scanId }: { scanId: string }) {
           )}
         </CategorySection>
 
-        {/* 4. Dependencies */}
         <CategorySection
           title="Vulnerable Dependencies"
           findingsCount={findings.dependencies.findings_count}
           aiSummary={ai.category_summaries.dependencies}
+          icon={
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            </svg>
+          }
         >
           {findings.dependencies.findings_count === 0 ? (
             <NoIssues />
@@ -306,7 +333,6 @@ export default function StatusPoller({ scanId }: { scanId: string }) {
         </CategorySection>
       </div>
 
-      {/* Positive Findings */}
       {ai.positive_findings && ai.positive_findings.length > 0 && (
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 space-y-6">
           <h3 className="text-xl font-bold text-white flex items-center gap-2">
@@ -326,8 +352,6 @@ export default function StatusPoller({ scanId }: { scanId: string }) {
   );
 }
 
-/* ── Helpers ─────────────────────────────────────────────────────────────── */
-
 function Spinner({ size = "w-8 h-8" }: { size?: string }) {
   return (
     <svg
@@ -343,12 +367,12 @@ function Spinner({ size = "w-8 h-8" }: { size?: string }) {
         r="10"
         stroke="currentColor"
         strokeWidth="4"
-      ></circle>
+      />
       <path
         className="opacity-75"
         fill="currentColor"
         d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-      ></path>
+      />
     </svg>
   );
 }

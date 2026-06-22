@@ -19,14 +19,16 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-if settings.ENVIRONMENT == "development":
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "https://breakmyapp-production-2f29.up.railway.app",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(scans.router, prefix="/api/v1")
 
