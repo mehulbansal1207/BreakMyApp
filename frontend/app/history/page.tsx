@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { listScans } from "@/lib/api";
 import { ScanResponse } from "@/types/scan";
+import AuthGuard from "@/components/AuthGuard";
 
-export default function HistoryPage() {
+function HistoryContent() {
   const [scans, setScans] = useState<ScanResponse[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -162,5 +163,13 @@ export default function HistoryPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function HistoryPage() {
+  return (
+    <AuthGuard>
+      <HistoryContent />
+    </AuthGuard>
   );
 }

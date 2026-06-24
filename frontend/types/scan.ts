@@ -135,3 +135,11 @@ export interface ScanResponse {
   created_at: string;
   updated_at: string;
 }
+
+export interface UserResponse {
+  id: string;
+  email: string;
+  firebase_uid: string;
+  created_at: string;
+  is_active: boolean;
+}

@@ -6,6 +6,10 @@ from pydantic import BaseModel, Field, field_validator
 
 class ScanCreate(BaseModel):
     repo_url: str = Field(..., description="The GitHub repository URL to scan.")
+    callback_url: Optional[str] = Field(
+        default=None,
+        description="Optional URL to POST scan results to when complete."
+    )
 
     @field_validator("repo_url")
     @classmethod
@@ -16,9 +20,20 @@ class ScanCreate(BaseModel):
             raise ValueError("Invalid GitHub repository URL. Must be a valid HTTPS URL (e.g., https://github.com/owner/repo).")
         return v.strip()
 
+    @field_validator("callback_url")
+    @classmethod
+    def validate_callback_url(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        v = v.strip()
+        if not v.startswith(("http://", "https://")):
+            raise ValueError("callback_url must be a valid HTTP or HTTPS URL.")
+        return v
+
 class ScanResponse(BaseModel):
     id: UUID
     repo_url: str
+    callback_url: Optional[str] = None
     status: str
     score: Optional[int] = None
     findings: Optional[Dict[str, Any]] = None

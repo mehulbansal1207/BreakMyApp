@@ -12,6 +12,8 @@ from app.services.scanners.semgrep_scanner import scan_semgrep
 from app.services.scanners.bandit_scanner import scan_bandit
 from app.services.scanners.dependency_scanner import scan_dependencies
 from app.services.ai_explainer import explain_findings
+from app.services.minio_service import upload_scan_artifacts
+from app.services.webhook_service import fire_webhook, build_webhook_payload
 
 
 logger = logging.getLogger(__name__)
@@ -33,6 +35,7 @@ def get_task_session():
 async def _run_full_analysis(scan_id: str) -> None:
     scan_uuid = UUID(scan_id)
     repo_path = None
+    callback_url = None
     engine, session_factory = get_task_session()
 
     try:
@@ -45,6 +48,7 @@ async def _run_full_analysis(scan_id: str) -> None:
                 logger.error(f"Scan {scan_id} not found.")
                 return
             repo_url = scan.repo_url
+            callback_url = scan.callback_url
             scan.status = "running"
             await session.commit()
             logger.info(f"Scan {scan_id} status set to running.")
@@ -113,6 +117,21 @@ async def _run_full_analysis(scan_id: str) -> None:
             ai_explanation = explain_findings(findings, score)
             findings["ai_explanation"] = ai_explanation
 
+            # Upload raw scanner artifacts to MinIO (non-blocking — failure does not affect scan)
+            try:
+                uploaded = upload_scan_artifacts(scan_id, {
+                    "secrets": secrets,
+                    "semgrep": semgrep,
+                    "bandit": bandit,
+                    "dependencies": dependencies,
+                })
+                if uploaded:
+                    logger.info(f"Artifacts uploaded to MinIO for scan {scan_id}")
+                else:
+                    logger.warning(f"MinIO upload skipped or failed for scan {scan_id}")
+            except Exception as e:
+                logger.warning(f"MinIO upload error for scan {scan_id}: {e}")
+
         except RuntimeError as e:
             logger.error(f"Analysis failed for scan {scan_id}: {e}")
             findings = {"error": str(e)}
@@ -140,6 +159,18 @@ async def _run_full_analysis(scan_id: str) -> None:
                 logger.info(
                     f"Scan {scan_id} saved with status={status} score={score}."
                 )
+
+                # Fire webhook if callback_url was provided
+                if callback_url:
+                    try:
+                        payload = build_webhook_payload(scan_id, scan)
+                        success = fire_webhook(scan_id, callback_url, payload)
+                        if success:
+                            logger.info(f"Webhook fired successfully for scan {scan_id}")
+                        else:
+                            logger.warning(f"Webhook failed for scan {scan_id} to {callback_url}")
+                    except Exception as e:
+                        logger.warning(f"Webhook error for scan {scan_id}: {e}")
 
     finally:
         await engine.dispose()

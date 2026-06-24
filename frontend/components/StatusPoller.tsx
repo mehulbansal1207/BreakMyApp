@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getScan } from "@/lib/api";
 import { ScanResponse } from "@/types/scan";
+import { onAuthChange } from "@/lib/firebase-auth";
 import ScoreRing from "./ScoreRing";
 import CategorySection from "./CategorySection";
 import FindingCard from "./FindingCard";
@@ -11,6 +12,17 @@ import FindingCard from "./FindingCard";
 export default function StatusPoller({ scanId }: { scanId: string }) {
   const [scan, setScan] = useState<ScanResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [artifactUrls, setArtifactUrls] = useState<Record<string, string> | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthChange((user) => {
+      setIsLoggedIn(!!user);
+      setAuthLoading(false);
+    });
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -37,6 +49,20 @@ export default function StatusPoller({ scanId }: { scanId: string }) {
       clearTimeout(timeoutId);
     };
   }, [scanId]);
+
+  useEffect(() => {
+    if (scan?.status !== "completed" || !isLoggedIn) return;
+    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "";
+    fetch(`${apiBase}/api/v1/scans/${scanId}/artifacts`)
+      .then((res) => {
+        if (res.ok) return res.json();
+        return null;
+      })
+      .then((data) => {
+        if (data) setArtifactUrls(data);
+      })
+      .catch(() => null); // silently ignore — artifacts are optional
+  }, [scan?.status, isLoggedIn, scanId]);
 
   if (!scan && !error) {
     return (
@@ -112,18 +138,11 @@ export default function StatusPoller({ scanId }: { scanId: string }) {
   const ai = findings.ai_explanation;
   const repo = findings.repo_info;
 
-  return (
-    <div className="max-w-4xl mx-auto px-6 py-10 space-y-12">
-      <div>
-        <Link
-          href="/"
-          className="text-gray-500 hover:text-white transition-colors text-sm font-medium"
-        >
-          ← Scan Another Repository
-        </Link>
-        <h1 className="text-2xl font-bold mt-6 break-all">{scan.repo_url}</h1>
-      </div>
+  // ── Auth-gated results wrapper ───────────────────────────────────────────
+  const showBlur = !authLoading && !isLoggedIn;
 
+  const DashboardBody = (
+    <>
       {score === 0 && (
         <div className="w-full bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex gap-3">
           <svg
@@ -147,7 +166,7 @@ export default function StatusPoller({ scanId }: { scanId: string }) {
             <p className="text-amber-300/80 text-sm">
               A score of 0 typically means critical secrets or credentials were
               detected in your repository. Each critical secret deducts 20 points.
-              Review the Secrets & Credentials section below and rotate any exposed
+              Review the Secrets &amp; Credentials section below and rotate any exposed
               credentials immediately.
             </p>
           </div>
@@ -347,6 +366,119 @@ export default function StatusPoller({ scanId }: { scanId: string }) {
             ))}
           </ul>
         </div>
+      )}
+
+      {artifactUrls && (
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-4">
+          <h3 className="text-lg font-bold text-white flex items-center gap-2">
+            <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Raw Scanner Logs
+          </h3>
+          <p className="text-gray-400 text-xs">
+            Download the full JSON output from each scanner. Links expire in 1 hour.
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { key: "secrets", label: "TruffleHog" },
+              { key: "semgrep", label: "Semgrep" },
+              { key: "bandit", label: "Bandit" },
+              { key: "dependencies", label: "Dependencies" },
+            ].map(({ key, label }) =>
+              artifactUrls[key] ? (
+                <a
+                  key={key}
+                  href={artifactUrls[key]}
+                  download
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex flex-col items-center gap-2 p-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl text-center transition"
+                >
+                  <svg className="w-6 h-6 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span className="text-xs text-gray-300 font-medium">{label}</span>
+                </a>
+              ) : null
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  return (
+    <div className="max-w-4xl mx-auto px-6 py-10 space-y-12">
+      <div>
+        <Link
+          href="/"
+          className="text-gray-500 hover:text-white transition-colors text-sm font-medium"
+        >
+          ← Scan Another Repository
+        </Link>
+        <h1 className="text-2xl font-bold mt-6 break-all">{scan.repo_url}</h1>
+      </div>
+
+      {/* Results — blurred for unauthenticated users */}
+      {authLoading ? (
+        // While auth loads, render normally to avoid flash
+        <div className="space-y-12">{DashboardBody}</div>
+      ) : showBlur ? (
+        <div className="relative">
+          {/* Blurred results behind the overlay */}
+          <div className="blur-lg pointer-events-none select-none space-y-12">
+            {DashboardBody}
+          </div>
+
+          {/* Sign-up overlay */}
+          <div className="fixed inset-0 flex flex-col items-center justify-center z-50">
+            <div className="bg-gray-900/95 backdrop-blur-sm border border-gray-700 rounded-2xl p-8 max-w-md w-full mx-4 text-center space-y-4 shadow-2xl">
+              {/* Lock icon */}
+              <svg
+                className="w-12 h-12 text-indigo-400 mx-auto"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                />
+              </svg>
+
+              <h2 className="text-xl font-bold text-white">Sign in to view results</h2>
+              <p className="text-gray-400 text-sm">
+                Create a free account to see your full Production Readiness Report
+                including all findings, AI analysis, and recommendations.
+              </p>
+
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <Link
+                  href="/login"
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-6 py-3 text-sm font-medium transition text-center"
+                >
+                  Create Account
+                </Link>
+                <Link
+                  href="/login"
+                  className="flex-1 border border-gray-600 text-gray-300 hover:text-white rounded-xl px-6 py-3 text-sm transition text-center"
+                >
+                  Sign In
+                </Link>
+              </div>
+
+              <p className="text-xs text-gray-500">
+                Your scan is saved. Sign in anytime to view it.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        // Fully authenticated — show everything
+        <div className="space-y-12">{DashboardBody}</div>
       )}
     </div>
   );

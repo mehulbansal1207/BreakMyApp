@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { User as FirebaseUser } from "firebase/auth";
 import { createScan } from "@/lib/api";
+import { onAuthChange, logOut } from "@/lib/firebase-auth";
 
 const EXAMPLES = [
   "https://github.com/mehulbansal1207/BookGPT",
@@ -16,54 +18,73 @@ export default function Home() {
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [userLoading, setUserLoading] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = onAuthChange((firebaseUser) => {
+      setUser(firebaseUser);
+      setUserLoading(false);
+    });
+    return unsubscribe;
+  }, []);
 
   const handleSubmit = async () => {
     setError(null);
     const url = inputValue.trim();
-
-    if (!url) {
-      setError("Please enter a repository URL.");
-      return;
-    }
-
-    const githubRegex =
-      /^https?:\/\/(www\.)?github\.com\/[\w.-]+\/[\w.-]+$/i;
+    if (!url) { setError("Please enter a repository URL."); return; }
+    const githubRegex = /^https?:\/\/(www\.)?github\.com\/[\w.-]+\/[\w.-]+$/i;
     if (!githubRegex.test(url)) {
-      setError(
-        "Please enter a valid GitHub repository URL (e.g., https://github.com/user/repo)."
-      );
+      setError("Please enter a valid GitHub repository URL (e.g., https://github.com/user/repo).");
       return;
     }
-
     setIsLoading(true);
     try {
       const scan = await createScan(url);
       router.push(`/scan/${scan.id}`);
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : "Failed to start scan.";
+      const message = err instanceof Error ? err.message : "Failed to start scan.";
       setError(message);
       setIsLoading(false);
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleSubmit();
-    }
+    if (e.key === "Enter") { e.preventDefault(); handleSubmit(); }
   };
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-gray-950">
+    <main className="relative flex min-h-screen flex-col items-center justify-center p-6 bg-gray-950">
+      {/* Auth status — top right corner */}
+      <div className="absolute top-6 right-6 flex items-center gap-3">
+        {!userLoading && (
+          user ? (
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-300 font-medium max-w-[180px] truncate" title={user.email || ""}>
+                {user.email}
+              </span>
+              <button
+                onClick={() => logOut()}
+                className="px-3 py-1.5 text-sm border border-gray-600 text-gray-300 hover:text-white hover:border-gray-400 rounded-lg transition"
+              >
+                Sign out
+              </button>
+            </div>
+          ) : (
+            <Link
+              href="/login"
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition"
+            >
+              Sign In
+            </Link>
+          )
+        )}
+      </div>
+
       <div className="w-full max-w-2xl text-center space-y-8">
         <div className="space-y-4">
-          <h1 className="text-5xl md:text-6xl font-bold tracking-tight text-brand">
-            BreakMyApp
-          </h1>
-          <p className="text-lg text-gray-400">
-            Before your users break it, we will.
-          </p>
+          <h1 className="text-5xl md:text-6xl font-bold tracking-tight text-brand">BreakMyApp</h1>
+          <p className="text-lg text-gray-400">Before your users break it, we will.</p>
         </div>
 
         <div className="space-y-4 pt-4">
@@ -78,37 +99,18 @@ export default function Home() {
               className="w-full px-6 py-4 text-lg bg-gray-900 border border-gray-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand font-mono placeholder:text-gray-600 transition-all disabled:opacity-50"
             />
             {error && (
-              <p className="absolute -bottom-6 left-2 text-sm text-score-critical">
-                {error}
-              </p>
+              <p className="absolute -bottom-6 left-2 text-sm text-score-critical">{error}</p>
             )}
           </div>
-
           <button
             onClick={handleSubmit}
             disabled={isLoading}
             className="w-full sm:w-auto px-8 py-4 bg-brand hover:bg-brand-dark text-white rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 mx-auto"
           >
             {isLoading && (
-              <svg
-                className="animate-spin h-5 w-5 text-white"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                />
+              <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
               </svg>
             )}
             {isLoading ? "Analyzing..." : "Analyze Repository"}
@@ -116,33 +118,21 @@ export default function Home() {
         </div>
 
         <div className="pt-8 space-y-4">
-          <p className="text-sm text-gray-500 font-medium uppercase tracking-wider">
-            Try an example
-          </p>
+          <p className="text-sm text-gray-500 font-medium uppercase tracking-wider">Try an example</p>
           <div className="flex flex-wrap justify-center gap-3">
             {EXAMPLES.map((url) => (
-              <button
-                key={url}
-                onClick={() => setInputValue(url)}
-                disabled={isLoading}
-                className="px-4 py-2 text-sm bg-gray-900 hover:bg-gray-800 border border-gray-800 rounded-full transition-colors text-gray-300 disabled:opacity-50"
-              >
+              <button key={url} onClick={() => setInputValue(url)} disabled={isLoading}
+                className="px-4 py-2 text-sm bg-gray-900 hover:bg-gray-800 border border-gray-800 rounded-full transition-colors text-gray-300 disabled:opacity-50">
                 {url.replace("https://github.com/", "")}
               </button>
             ))}
           </div>
         </div>
 
-        <Link
-          href="/history"
-          className="text-sm text-gray-500 hover:text-gray-400 transition text-center block mt-4"
-        >
+        <Link href="/history" className="text-sm text-gray-500 hover:text-gray-400 transition text-center block mt-4">
           View scan history →
         </Link>
-        <Link
-          href="/docs/github-action"
-          className="text-sm text-gray-500 hover:text-gray-400 transition text-center block mt-2"
-        >
+        <Link href="/docs/github-action" className="text-sm text-gray-500 hover:text-gray-400 transition text-center block mt-2">
           GitHub Action docs →
         </Link>
       </div>

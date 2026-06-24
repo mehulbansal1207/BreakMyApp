@@ -57,3 +57,5 @@ backend/.semgrep/
 backend/.cache/
 .semgrep/
 .cache/
+
+backend/firebase-service-account.json
