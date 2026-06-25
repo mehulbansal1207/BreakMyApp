@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   signInWithGoogle,
@@ -14,7 +14,7 @@ import {
   logOut,
 } from "@/lib/firebase-auth";
 import { auth } from "@/lib/firebase";
-import { getCurrentUserInfo } from "@/lib/api";
+import { getCurrentUserInfo, claimScan } from "@/lib/api";
 
 function getFirebaseErrorMessage(code: string): string | null {
   switch (code) {
@@ -49,6 +49,13 @@ function getFirebaseErrorMessage(code: string): string | null {
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Read raw return URL, but only allow internal /scan/<uuid> paths to prevent open redirect
+  const rawReturnTo = searchParams.get("returnTo") ?? "/";
+  const scanIdMatch = rawReturnTo.match(/^\/scan\/([\w-]+)$/);
+  const pendingScanId = scanIdMatch ? scanIdMatch[1] : null;
+  const returnTo = pendingScanId ? rawReturnTo : "/";
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -62,11 +69,11 @@ export default function LoginPage() {
   useEffect(() => {
     const unsubscribe = onAuthChange((user) => {
       if (user && (user.emailVerified || user.providerData[0]?.providerId !== "password")) {
-        router.replace("/");
+        router.replace(returnTo);
       }
     });
     return unsubscribe;
-  }, [router]);
+  }, [router, returnTo]);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -84,10 +91,12 @@ export default function LoginPage() {
         await signInWithGithub();
       }
       // Register / update the user in the backend DB immediately.
-      // Without this call, /api/v1/auth/me is never hit and the user
-      // record is never created, breaking all authenticated API calls.
       await getCurrentUserInfo();
-      router.replace("/");
+      // Claim the anonymous scan (if coming from /scan/[id]).
+      if (pendingScanId) {
+        await claimScan(pendingScanId).catch(() => { /* already owned or 403 — ignore */ });
+      }
+      router.replace(returnTo);
     } catch (err: unknown) {
       const code = (err as { code?: string }).code ?? "";
       console.error("Firebase social login failed", { provider, code, err });
@@ -113,7 +122,11 @@ export default function LoginPage() {
           );
           return;
         }
-        router.replace("/");
+        // Claim the anonymous scan (if coming from /scan/[id]).
+        if (pendingScanId) {
+          await claimScan(pendingScanId).catch(() => { /* already owned or 403 — ignore */ });
+        }
+        router.replace(returnTo);
       } else {
         await signUpWithEmail(email, password);
         // Don't redirect — show verification pending screen
@@ -133,7 +146,11 @@ export default function LoginPage() {
     try {
       await reloadUser();
       if (auth.currentUser?.emailVerified) {
-        router.replace("/");
+        // Claim the anonymous scan (if coming from /scan/[id]).
+        if (pendingScanId) {
+          await claimScan(pendingScanId).catch(() => { /* already owned or 403 — ignore */ });
+        }
+        router.replace(returnTo);
       } else {
         setError("Email not verified yet. Please check your inbox.");
       }

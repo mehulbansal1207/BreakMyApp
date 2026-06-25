@@ -67,3 +67,17 @@ export async function getCurrentUserInfo(): Promise<UserResponse> {
 
   return res.json() as Promise<UserResponse>;
 }
+
+export async function claimScan(scanId: string): Promise<ScanResponse> {
+  const res = await fetch(`${API_BASE}/api/v1/scans/${scanId}/claim`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Failed to claim scan (${res.status}): ${body}`);
+  }
+
+  return res.json() as Promise<ScanResponse>;
+}

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getScan } from "@/lib/api";
+import { getScan, claimScan } from "@/lib/api";
 import { ScanResponse } from "@/types/scan";
 import { onAuthChange } from "@/lib/firebase-auth";
 import ScoreRing from "./ScoreRing";
@@ -63,6 +63,15 @@ export default function StatusPoller({ scanId }: { scanId: string }) {
       })
       .catch(() => null); // silently ignore — artifacts are optional
   }, [scan?.status, isLoggedIn, scanId]);
+
+  // When a visitor logs in while viewing an anonymous scan, claim it
+  // so it appears in their history and is attached to their account.
+  useEffect(() => {
+    if (!isLoggedIn || !scanId) return;
+    claimScan(scanId).catch(() => {
+      // 403 = already belongs to another user; silently ignore
+    });
+  }, [isLoggedIn, scanId]);
 
   if (!scan && !error) {
     return (
@@ -457,13 +466,13 @@ export default function StatusPoller({ scanId }: { scanId: string }) {
 
               <div className="flex flex-col sm:flex-row gap-3 pt-2">
                 <Link
-                  href="/login"
+                  href={`/login?returnTo=/scan/${scanId}`}
                   className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-6 py-3 text-sm font-medium transition text-center"
                 >
                   Create Account
                 </Link>
                 <Link
-                  href="/login"
+                  href={`/login?returnTo=/scan/${scanId}`}
                   className="flex-1 border border-gray-600 text-gray-300 hover:text-white rounded-xl px-6 py-3 text-sm transition text-center"
                 >
                   Sign In

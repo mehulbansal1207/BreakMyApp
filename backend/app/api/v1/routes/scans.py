@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from app.core.database import get_db
 from app.core.limiter import check_rate_limit
-from app.core.auth import get_optional_user
+from app.core.auth import get_current_user, get_optional_user
 from app.models.scan import Scan
 from app.models.user import User
 from app.schemas.scan import ScanCreate, ScanResponse
@@ -15,6 +15,7 @@ from app.tasks.analysis import run_analysis
 from app.services.minio_service import get_artifact_urls
 
 router = APIRouter(prefix="/scans", tags=["scans"])
+
 
 
 @router.post("/", response_model=ScanResponse, status_code=status.HTTP_201_CREATED)
@@ -150,3 +151,41 @@ async def get_scan_artifacts(
         )
 
     return urls
+
+
+@router.post("/{scan_id}/claim", response_model=ScanResponse)
+async def claim_scan(
+    scan_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Attach an anonymous scan to the authenticated user.
+
+    - 404 if scan does not exist.
+    - 403 if scan already belongs to a *different* user.
+    - 200 (idempotent) if scan already belongs to the caller.
+    - 200 after setting scan.user_id = current_user.id when scan was anonymous.
+    """
+    result = await db.execute(select(Scan).where(Scan.id == scan_id))
+    scan = result.scalar_one_or_none()
+
+    if not scan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Scan not found",
+        )
+
+    if scan.user_id is not None and scan.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Scan already belongs to another user",
+        )
+
+    if scan.user_id is None:
+        scan.user_id = current_user.id
+        await db.commit()
+        await db.refresh(scan)
+
+    return scan
+
