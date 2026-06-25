@@ -14,6 +14,7 @@ import {
   logOut,
 } from "@/lib/firebase-auth";
 import { auth } from "@/lib/firebase";
+import { getCurrentUserInfo } from "@/lib/api";
 
 function getFirebaseErrorMessage(code: string): string | null {
   switch (code) {
@@ -31,6 +32,16 @@ function getFirebaseErrorMessage(code: string): string | null {
       return "Invalid email or password.";
     case "auth/too-many-requests":
       return "Too many failed attempts. Please try again later.";
+    case "auth/account-exists-with-different-credential":
+      return "An account already exists with a different sign-in method for this email.";
+    case "auth/unauthorized-domain":
+      return "This domain is not authorised for sign-in. Please contact support.";
+    case "auth/operation-not-allowed":
+      return "This sign-in method is not enabled. Please contact support.";
+    case "auth/popup-blocked":
+      return "Sign-in popup was blocked by your browser. Please allow popups and try again.";
+    case "auth/cancelled-popup-request":
+      return null; // silent – another popup opened
     default:
       return "Something went wrong. Please try again.";
   }
@@ -72,9 +83,14 @@ export default function LoginPage() {
       } else {
         await signInWithGithub();
       }
+      // Register / update the user in the backend DB immediately.
+      // Without this call, /api/v1/auth/me is never hit and the user
+      // record is never created, breaking all authenticated API calls.
+      await getCurrentUserInfo();
       router.replace("/");
     } catch (err: unknown) {
       const code = (err as { code?: string }).code ?? "";
+      console.error("Firebase social login failed", { provider, code, err });
       const msg = getFirebaseErrorMessage(code);
       if (msg) setError(msg);
     } finally {

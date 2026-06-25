@@ -14,6 +14,8 @@ import { auth } from "@/lib/firebase";
 
 export const googleProvider = new GoogleAuthProvider();
 export const githubProvider = new GithubAuthProvider();
+githubProvider.addScope("read:user");
+githubProvider.addScope("user:email");
 
 export async function signInWithGoogle(): Promise<FirebaseUser> {
   const result = await signInWithPopup(auth, googleProvider);

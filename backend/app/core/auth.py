@@ -49,7 +49,14 @@ async def get_current_user(
         )
 
     firebase_uid: str = decoded_token["uid"]
-    email: str = decoded_token.get("email", "")
+    # GitHub users with a private primary email may have no "email" claim.
+    # Fall back to the identities array, then a deterministic placeholder so
+    # the NOT NULL / UNIQUE constraint on User.email is never violated.
+    email: str | None = decoded_token.get("email")
+    if not email:
+        identities = decoded_token.get("firebase", {}).get("identities", {})
+        emails: list = identities.get("email", [])
+        email = emails[0] if emails else f"{firebase_uid}@no-email.firebase.local"
 
     result = await db.execute(select(User).where(User.firebase_uid == firebase_uid))
     user = result.scalar_one_or_none()
