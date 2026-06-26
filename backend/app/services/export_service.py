@@ -63,7 +63,7 @@ def generate_markdown(scan: Any) -> str:
 
     findings: dict = (scan.findings or {}) if scan.findings is not None else {}
     ai: dict = findings.get("ai_explanation") or {}
-    cat_exp: dict = ai.get("category_explanations") or {}
+    cat_exp: dict = ai.get("category_summaries") or {}
     top_priorities: list = ai.get("top_priorities") or []
     positive_findings: list = ai.get("positive_findings") or []
 
@@ -104,8 +104,8 @@ def generate_markdown(scan: Any) -> str:
         for i, priority in enumerate(top_priorities, 1):
             title = priority.get("title") or "Untitled"
             severity = priority.get("severity") or "INFO"
-            description = priority.get("description") or ""
-            recommendation = priority.get("recommendation") or ""
+            description = priority.get("explanation") or ""
+            recommendation = priority.get("action") or ""
 
             lines.append(f"{i}. ### {title}")
             lines.append(f"   **Severity:** `{severity}`")
@@ -127,7 +127,7 @@ def generate_markdown(scan: Any) -> str:
     if secrets_exp:
         lines.append(secrets_exp)
         lines.append("")
-    secrets_list: list = findings.get("secrets") or []
+    secrets_list: list = (findings.get("secrets") or {}).get("findings") or []
     if secrets_list:
         lines.append("| Type | Severity | File | Line | Description |")
         lines.append("|------|----------|------|------|-------------|")
@@ -136,7 +136,7 @@ def generate_markdown(scan: Any) -> str:
             sev = str(item.get("severity") or "")
             f = str(item.get("file") or "")
             ln = str(item.get("line") or "")
-            desc = str(item.get("description") or "").replace("|", "\\|")
+            desc = str(item.get("detector") or item.get("description") or "").replace("|", "\\|")
             lines.append(f"| {t} | {sev} | {f} | {ln} | {desc} |")
     else:
         lines.append("No issues found in this category.")
@@ -144,11 +144,11 @@ def generate_markdown(scan: Any) -> str:
 
     # 6b. Static Analysis / Semgrep
     lines.append("### Static Analysis / Semgrep\n")
-    semgrep_exp = cat_exp.get("semgrep") or ""
+    semgrep_exp = cat_exp.get("security") or ""
     if semgrep_exp:
         lines.append(semgrep_exp)
         lines.append("")
-    semgrep_list: list = findings.get("semgrep") or []
+    semgrep_list: list = (findings.get("semgrep") or {}).get("findings") or []
     if semgrep_list:
         lines.append("| Rule ID | Severity | File | Line | Message |")
         lines.append("|---------|----------|------|------|---------|")
@@ -156,7 +156,7 @@ def generate_markdown(scan: Any) -> str:
             rule_id = str(item.get("rule_id") or "")
             sev = str(item.get("severity") or "")
             f = str(item.get("file") or "")
-            ln = str(item.get("line") or "")
+            ln = str(item.get("line_start") or "")
             msg = str(item.get("message") or "").replace("|", "\\|")
             lines.append(f"| {rule_id} | {sev} | {f} | {ln} | {msg} |")
     else:
@@ -165,11 +165,11 @@ def generate_markdown(scan: Any) -> str:
 
     # 6c. Python Security / Bandit
     lines.append("### Python Security / Bandit\n")
-    bandit_exp = cat_exp.get("bandit") or ""
+    bandit_exp = cat_exp.get("code_quality") or ""
     if bandit_exp:
         lines.append(bandit_exp)
         lines.append("")
-    bandit_list: list = findings.get("bandit") or []
+    bandit_list: list = (findings.get("bandit") or {}).get("findings") or []
     if bandit_list:
         lines.append("| Test ID | Severity | File | Line | Issue |")
         lines.append("|---------|----------|------|------|-------|")
@@ -178,7 +178,7 @@ def generate_markdown(scan: Any) -> str:
             sev = str(item.get("severity") or "")
             f = str(item.get("file") or "")
             ln = str(item.get("line") or "")
-            issue = str(item.get("issue_text") or "").replace("|", "\\|")
+            issue = str(item.get("message") or item.get("issue_text") or "").replace("|", "\\|")
             lines.append(f"| {test_id} | {sev} | {f} | {ln} | {issue} |")
     else:
         lines.append("No issues found in this category.")
@@ -190,7 +190,7 @@ def generate_markdown(scan: Any) -> str:
     if deps_exp:
         lines.append(deps_exp)
         lines.append("")
-    deps_list: list = findings.get("dependencies") or []
+    deps_list: list = (findings.get("dependencies") or {}).get("findings") or []
     if deps_list:
         lines.append("| Package | Severity | CVE/ID | Description |")
         lines.append("|---------|----------|--------|-------------|")
@@ -247,7 +247,7 @@ def generate_pdf(scan: Any) -> bytes:
 
     findings: dict = (scan.findings or {}) if scan.findings is not None else {}
     ai: dict = findings.get("ai_explanation") or {}
-    cat_exp: dict = ai.get("category_explanations") or {}
+    cat_exp: dict = ai.get("category_summaries") or {}
     top_priorities: list = ai.get("top_priorities") or []
     positive_findings: list = ai.get("positive_findings") or []
 
@@ -379,8 +379,8 @@ def generate_pdf(scan: Any) -> bytes:
         for i, priority in enumerate(top_priorities, 1):
             title = priority.get("title") or "Untitled"
             severity = (priority.get("severity") or "INFO").upper()
-            description = priority.get("description") or ""
-            recommendation = priority.get("recommendation") or ""
+            description = priority.get("explanation") or ""
+            recommendation = priority.get("action") or ""
             sev_color = _severity_color(severity)
 
             pdf.ln(2)
@@ -418,7 +418,7 @@ def generate_pdf(scan: Any) -> bytes:
     pdf.set_text_color(*_DARK)
     pdf.cell(0, 7, "Secrets Detection", ln=True)
     body_text(cat_exp.get("secrets") or "")
-    secrets_list: list = findings.get("secrets") or []
+    secrets_list: list = (findings.get("secrets") or {}).get("findings") or []
     if secrets_list:
         col_w = [30, 22, 55, 15, 58]
         headers = ["Type", "Severity", "File", "Line", "Description"]
@@ -428,7 +428,7 @@ def generate_pdf(scan: Any) -> bytes:
                 _trunc(r.get("severity") or "", 20),
                 _trunc(r.get("file") or "", 60),
                 str(r.get("line") or ""),
-                _trunc(r.get("description") or "", 80),
+                _trunc(r.get("detector") or r.get("description") or "", 80),
             ]
             for r in secrets_list
         ]
@@ -442,8 +442,8 @@ def generate_pdf(scan: Any) -> bytes:
     pdf.set_font("Helvetica", "B", 11)
     pdf.set_text_color(*_DARK)
     pdf.cell(0, 7, "Static Analysis / Semgrep", ln=True)
-    body_text(cat_exp.get("semgrep") or "")
-    semgrep_list: list = findings.get("semgrep") or []
+    body_text(cat_exp.get("security") or "")
+    semgrep_list: list = (findings.get("semgrep") or {}).get("findings") or []
     if semgrep_list:
         col_w = [40, 22, 55, 15, 48]
         headers = ["Rule ID", "Severity", "File", "Line", "Message"]
@@ -452,7 +452,7 @@ def generate_pdf(scan: Any) -> bytes:
                 _trunc(r.get("rule_id") or "", 40),
                 _trunc(r.get("severity") or "", 20),
                 _trunc(r.get("file") or "", 60),
-                str(r.get("line") or ""),
+                str(r.get("line_start") or ""),
                 _trunc(r.get("message") or "", 80),
             ]
             for r in semgrep_list
@@ -467,8 +467,8 @@ def generate_pdf(scan: Any) -> bytes:
     pdf.set_font("Helvetica", "B", 11)
     pdf.set_text_color(*_DARK)
     pdf.cell(0, 7, "Python Security / Bandit", ln=True)
-    body_text(cat_exp.get("bandit") or "")
-    bandit_list: list = findings.get("bandit") or []
+    body_text(cat_exp.get("code_quality") or "")
+    bandit_list: list = (findings.get("bandit") or {}).get("findings") or []
     if bandit_list:
         col_w = [30, 22, 55, 15, 58]
         headers = ["Test ID", "Severity", "File", "Line", "Issue"]
@@ -478,7 +478,7 @@ def generate_pdf(scan: Any) -> bytes:
                 _trunc(r.get("severity") or "", 20),
                 _trunc(r.get("file") or "", 60),
                 str(r.get("line") or ""),
-                _trunc(r.get("issue_text") or "", 80),
+                _trunc(r.get("message") or r.get("issue_text") or "", 80),
             ]
             for r in bandit_list
         ]
@@ -493,7 +493,7 @@ def generate_pdf(scan: Any) -> bytes:
     pdf.set_text_color(*_DARK)
     pdf.cell(0, 7, "Dependency Vulnerabilities", ln=True)
     body_text(cat_exp.get("dependencies") or "")
-    deps_list: list = findings.get("dependencies") or []
+    deps_list: list = (findings.get("dependencies") or {}).get("findings") or []
     if deps_list:
         col_w = [35, 22, 40, 83]
         headers = ["Package", "Severity", "CVE/ID", "Description"]
