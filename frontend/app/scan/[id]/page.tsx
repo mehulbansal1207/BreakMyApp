@@ -563,7 +563,7 @@ export default function ScanPage({ params }: { params: { id: string } }) {
           <div className="border-t border-gray-700 pt-4 space-y-3">
             <p className="text-gray-400 text-xs">
               Post findings directly to the repository as GitHub Issues.
-              Only HIGH and CRITICAL findings are posted.
+              All findings are posted.
             </p>
             <div className="flex items-center gap-4 flex-wrap">
               <button

@@ -216,7 +216,7 @@ async def create_github_issues(
         for category, category_findings in category_map.items():
             for finding in category_findings:
                 severity = finding.get("severity", "").upper()
-                if severity not in ("HIGH", "CRITICAL"):
+                if not severity:
                     continue
 
                 title = _build_issue_title(category, finding)
