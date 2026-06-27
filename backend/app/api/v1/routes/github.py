@@ -6,7 +6,9 @@ from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.models.scan import Scan
-from app.services.github_reporter import run_github_report
+from app.services.github_reporter import run_github_report, create_github_issues
+from app.core.config import settings
+from app.core.auth import get_current_user
 
 router = APIRouter(prefix="/github", tags=["github"])
 
@@ -67,3 +69,92 @@ async def post_github_report(
     )
 
     return result_data
+
+
+@router.post("/scans/{scan_id}/create-issues")
+async def create_issues_for_scan(
+    scan_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    # Fetch scan
+    result = await db.execute(select(Scan).where(Scan.id == scan_id))
+    scan = result.scalar_one_or_none()
+
+    if not scan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Scan with ID '{scan_id}' not found."
+        )
+
+    # Must be completed
+    if scan.status != "completed":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Scan must be completed before creating issues"
+        )
+
+    # Must have findings
+    if scan.findings is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No findings available for this scan"
+        )
+
+    # Parse owner and repo from repo_url
+    # Expected format: https://github.com/{owner}/{repo}[.git]
+    try:
+        url = scan.repo_url.rstrip("/")
+        if url.endswith(".git"):
+            url = url[:-4]
+        parts = url.split("github.com/", 1)
+        if len(parts) != 2:
+            raise ValueError("Not a GitHub URL")
+        path_parts = parts[1].split("/")
+        if len(path_parts) < 2:
+            raise ValueError("Missing owner or repo")
+        owner = path_parts[0]
+        repo = path_parts[1]
+        if not owner or not repo:
+            raise ValueError("Empty owner or repo")
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Could not parse GitHub repository from scan URL"
+        )
+
+    # Check token is configured
+    if not settings.GITHUB_TOKEN:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="GitHub integration not configured"
+        )
+
+    # Build scan_summary
+    scan_summary = {
+        "score": scan.score,
+        "report_url": f"https://breakmyapp-production-2f29.up.railway.app/scan/{scan.id}",
+        "executive_summary": scan.findings.get("ai_explanation", {}).get("executive_summary", ""),
+        "top_priorities": scan.findings.get("ai_explanation", {}).get("top_priorities", []),
+        "findings_summary": {
+            "secrets": scan.findings.get("secrets", {}).get("findings_count", 0),
+            "security": scan.findings.get("semgrep", {}).get("findings_count", 0),
+            "code_quality": scan.findings.get("bandit", {}).get("findings_count", 0),
+            "dependencies": scan.findings.get("dependencies", {}).get("findings_count", 0),
+        },
+    }
+
+    # Create GitHub issues
+    issues_created = await create_github_issues(
+        token=settings.GITHUB_TOKEN,
+        owner=owner,
+        repo=repo,
+        scan_summary=scan_summary,
+        findings=scan.findings,
+    )
+
+    return {
+        "issues_created": issues_created,
+        "repo": f"{owner}/{repo}",
+        "scan_id": str(scan.id),
+    }

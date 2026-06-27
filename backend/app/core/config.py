@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     MINIO_SECRET_KEY: str
     ENVIRONMENT: str = "development"
     GEMINI_API_KEY: str = ""  
+    GITHUB_TOKEN: str = ""
 
 # Global configurations instance
 settings = Settings()
