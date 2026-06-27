@@ -42,12 +42,11 @@ def scan_semgrep(repo_path: str) -> Dict[str, Any]:
         process = subprocess.run(
             [
                 "semgrep", "scan", repo_path,
-                "--config", "p/security-audit",
-                "--config", "p/secrets",
-                "--config", "p/python",
+                "--config", "auto",
                 "--json",
                 "--no-rewrite-rule-ids",
                 "--timeout", "30",
+                "--max-memory", "1500",
                 "--quiet",
                 "--exclude", "node_modules",
                 "--exclude", "*.lock",

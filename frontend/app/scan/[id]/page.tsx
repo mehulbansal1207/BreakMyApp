@@ -475,8 +475,7 @@ export default function ScanPage({ params }: { params: { id: string } }) {
             <button
               onClick={handleExportMarkdown}
               disabled={mdLoading}
-              className="flex items-center gap-2 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 border border-gray-600 text-white rounded-lg transition text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+              className="flex items-center gap-2 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 border border-gray-600 text-white rounded-lg transition text-sm disabled:opacity-50 disabled:cursor-not-allowed"     >
               {mdLoading ? (
                 <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -616,7 +615,6 @@ export default function ScanPage({ params }: { params: { id: string } }) {
                 Create a free account to see your full Production Readiness Report
                 including all findings, AI analysis, and recommendations.
               </p>
-
               <div className="flex flex-col sm:flex-row gap-3 pt-2">
                 <Link
                   href={`/login?returnTo=/scan/${scanId}`}
