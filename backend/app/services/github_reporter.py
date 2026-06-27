@@ -221,8 +221,7 @@ async def create_github_issues(
 
                 title = _build_issue_title(category, finding)
                 body = _build_issue_body(category, finding, scan_summary)
-                labels = ["breakmyapp", "security", severity.lower()]
-                payload = {"title": title, "body": body, "labels": labels}
+                payload = {"title": title, "body": body}
 
                 try:
                     response = await client.post(url, headers=headers, json=payload, timeout=15)
