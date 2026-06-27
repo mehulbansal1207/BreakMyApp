@@ -44,14 +44,15 @@ export default function FindingCard({
       </div>
 
       {extra && Object.keys(extra).length > 0 && (
-        <div className="flex flex-wrap gap-2 shrink-0">
+        <div className="flex flex-wrap gap-2 max-w-[200px]">
           {Object.entries(extra).map(([key, value]) => (
             <div
               key={key}
-              className="inline-flex items-center px-2 py-1 rounded-md bg-gray-900 border border-gray-700 text-xs text-gray-400"
+              title={`${key}: ${value}`}
+              className="inline-flex items-center px-2 py-1 rounded-md bg-gray-900 border border-gray-700 text-xs text-gray-400 max-w-full overflow-hidden"
             >
-              <span className="font-medium mr-1 text-gray-500">{key}:</span>
-              <span className="font-mono text-gray-300 break-all">{value}</span>
+              <span className="font-medium mr-1 text-gray-500 shrink-0">{key}:</span>
+              <span className="font-mono text-gray-300 truncate">{value}</span>
             </div>
           ))}
         </div>
