@@ -278,8 +278,8 @@ rules:
   - id: custom-jwt-no-exp-javascript
     patterns:
       - pattern: jwt.sign($PAYLOAD, $SECRET)
-      - pattern-not-inside: |
-          jwt.sign($PAYLOAD, $SECRET, {expiresIn: ...})
+      - pattern-not: jwt.sign($PAYLOAD, $SECRET, {expiresIn: ...})
+      - pattern-not: jwt.sign($PAYLOAD, $SECRET, {..., expiresIn: ..., ...})
     message: >
       jwt.sign() called without an expiresIn option. Tokens without expiry are
       valid indefinitely, enabling replay attacks. Pass {expiresIn: '...'} as

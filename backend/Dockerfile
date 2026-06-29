@@ -23,6 +23,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Install Semgrep separately to isolate its dependencies
 RUN pip install --no-cache-dir "semgrep==1.100.0"
 RUN pip install --no-cache-dir bandit
+RUN pip install --no-cache-dir pip-audit
 
 COPY --chown=appuser:appgroup . .
 
