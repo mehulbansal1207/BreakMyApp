@@ -37,6 +37,8 @@ class ScanResponse(BaseModel):
     status: str
     score: Optional[int] = None
     findings: Optional[Dict[str, Any]] = None
+    progress: Optional[int] = None
+    current_step: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
