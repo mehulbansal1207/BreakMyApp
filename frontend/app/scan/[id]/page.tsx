@@ -49,7 +49,7 @@ export default function ScanPage({ params }: { params: { id: string } }) {
         if (cancelled) return;
         setScan(data);
         if (data.status === "completed" || data.status === "failed") return;
-        timeoutId = setTimeout(poll, 2000);
+        timeoutId = setTimeout(poll, data.status === "running" ? 500 : 2000);
       } catch (err: unknown) {
         if (cancelled) return;
         const msg =

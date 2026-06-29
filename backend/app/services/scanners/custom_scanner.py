@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import subprocess
+import tempfile
 from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
@@ -323,26 +324,36 @@ def scan_custom(repo_path: str) -> Dict[str, Any]:
     try:
         logger.info(f"Starting custom Semgrep scan on {repo_path}")
 
-        process = subprocess.run(
-            [
-                "semgrep", "scan", repo_path,
-                "--config", "-",          # read rules from stdin
-                "--json",
-                "--quiet",
-                "--timeout", "30",
-                "--exclude", "node_modules",
-                "--exclude", "*.lock",
-                "--exclude", ".next",
-                "--exclude", "dist",
-                "--exclude", "build",
-                "--exclude", "__pycache__",
-                "--exclude", "*.min.js",
-            ],
-            input=CUSTOM_RULES_YAML,
-            capture_output=True,
-            text=True,
-            timeout=90,
-        )
+        # Write CUSTOM_RULES_YAML to a named temp file
+        temp_file = tempfile.NamedTemporaryFile(suffix=".yaml", mode="w", delete=False)
+        try:
+            temp_file.write(CUSTOM_RULES_YAML)
+            temp_file.close()
+
+            process = subprocess.run(
+                [
+                    "semgrep", "scan", repo_path,
+                    "--config", temp_file.name,
+                    "--json",
+                    "--quiet",
+                    "--timeout", "30",
+                    "--exclude", "node_modules",
+                    "--exclude", "*.lock",
+                    "--exclude", ".next",
+                    "--exclude", "dist",
+                    "--exclude", "build",
+                    "--exclude", "__pycache__",
+                    "--exclude", "*.min.js",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=90,
+            )
+        finally:
+            try:
+                os.unlink(temp_file.name)
+            except Exception as e:
+                logger.warning(f"Failed to delete temp file {temp_file.name}: {e}")
 
         try:
             output = json.loads(process.stdout)
