@@ -134,6 +134,8 @@ export interface ScanResponse {
   findings: Findings | null;
   created_at: string;
   updated_at: string;
+  progress?: number;
+  current_step?: string;
 }
 
 export interface UserResponse {

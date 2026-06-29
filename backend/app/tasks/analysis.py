@@ -11,6 +11,7 @@ from app.services.scanners.secrets_scanner import scan_secrets
 from app.services.scanners.semgrep_scanner import scan_semgrep
 from app.services.scanners.bandit_scanner import scan_bandit
 from app.services.scanners.dependency_scanner import scan_dependencies
+from app.services.scanners.custom_scanner import scan_custom
 from app.services.ai_explainer import explain_findings
 from app.services.minio_service import upload_scan_artifacts
 from app.services.webhook_service import fire_webhook, build_webhook_payload
@@ -30,6 +31,33 @@ def get_task_session():
         expire_on_commit=False
     )
     return engine, session_factory
+
+
+async def update_progress(session_factory, scan_uuid, progress: int, current_step: str) -> None:
+    """Update scan progress and current_step in the database.
+
+    Opens a dedicated session for the update, commits, and closes.
+    Any failure is logged as a warning and never propagates to the caller.
+    """
+    try:
+        async with session_factory() as session:
+            result = await session.execute(
+                select(Scan).where(Scan.id == scan_uuid)
+            )
+            scan = result.scalar_one_or_none()
+            if scan:
+                scan.progress = progress
+                scan.current_step = current_step
+                await session.commit()
+                logger.info(
+                    f"Progress update for scan {scan_uuid}: "
+                    f"{progress}% — {current_step}"
+                )
+    except Exception as e:
+        logger.warning(
+            f"Failed to update progress for scan {scan_uuid} "
+            f"({progress}% / {current_step!r}): {e}"
+        )
 
 
 async def _run_full_analysis(scan_id: str) -> None:
@@ -53,24 +81,41 @@ async def _run_full_analysis(scan_id: str) -> None:
             await session.commit()
             logger.info(f"Scan {scan_id} status set to running.")
 
+        await update_progress(session_factory, scan_uuid, 5, "Cloning repository...")
+
         findings = {}
         score = 0
         status = "completed"
 
         try:
             repo_path = clone_repo(repo_url)
+            await update_progress(session_factory, scan_uuid, 15, "Analyzing repository structure...")
+
             repo_info = get_repo_info(repo_path)
+            await update_progress(session_factory, scan_uuid, 20, "Running TruffleHog secrets scanner...")
+
             secrets = scan_secrets(repo_path)
+            await update_progress(session_factory, scan_uuid, 38, "Running Semgrep SAST scanner...")
+
             semgrep = scan_semgrep(repo_path)
+            await update_progress(session_factory, scan_uuid, 55, "Running Bandit code quality scanner...")
+
             bandit = scan_bandit(repo_path)
+            await update_progress(session_factory, scan_uuid, 68, "Running dependency vulnerability scanner...")
+
             dependencies = scan_dependencies(repo_path)
+            await update_progress(session_factory, scan_uuid, 78, "Running custom vulnerability scanner...")
+
+            custom = scan_custom(repo_path)
+            await update_progress(session_factory, scan_uuid, 85, "Generating AI explanation...")
 
             findings = {
                 "repo_info": repo_info,
                 "secrets": secrets,
                 "semgrep": semgrep,
                 "bandit": bandit,
-                "dependencies": dependencies
+                "dependencies": dependencies,
+                "custom": custom,
             }
 
             score = 100
@@ -112,9 +157,20 @@ async def _run_full_analysis(scan_id: str) -> None:
                 elif severity == "LOW":
                     score -= 2
 
+            for finding in custom.get("findings", []):
+                severity = finding.get("severity", "")
+                if severity == "HIGH":
+                    score -= 10
+                elif severity == "MEDIUM":
+                    score -= 5
+                elif severity == "LOW":
+                    score -= 2
+
             score = max(0, score)
 
             ai_explanation = explain_findings(findings, score)
+            await update_progress(session_factory, scan_uuid, 95, "Saving results...")
+
             findings["ai_explanation"] = ai_explanation
 
             # Upload raw scanner artifacts to MinIO (non-blocking — failure does not affect scan)
@@ -124,6 +180,7 @@ async def _run_full_analysis(scan_id: str) -> None:
                     "semgrep": semgrep,
                     "bandit": bandit,
                     "dependencies": dependencies,
+                    "custom": custom,
                 })
                 if uploaded:
                     logger.info(f"Artifacts uploaded to MinIO for scan {scan_id}")
@@ -159,6 +216,9 @@ async def _run_full_analysis(scan_id: str) -> None:
                 logger.info(
                     f"Scan {scan_id} saved with status={status} score={score}."
                 )
+
+                if status == "completed":
+                    await update_progress(session_factory, scan_uuid, 100, "Scan complete")
 
                 # Fire webhook if callback_url was provided
                 if callback_url:

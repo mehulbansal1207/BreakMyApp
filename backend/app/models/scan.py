@@ -38,6 +38,12 @@ class Scan(Base):
         String, nullable=True, default=None
     )
 
+    # Progress of the scan (0 to 100)
+    progress: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
+
+    # Current step of the scan
+    current_step: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
+
     # Timestamps with timezone
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

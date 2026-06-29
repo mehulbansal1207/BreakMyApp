@@ -214,11 +214,7 @@ export default function ScanPage({ params }: { params: { id: string } }) {
     );
   }
 
-  if (scan?.status === "pending" || scan?.status === "running") {
-    const statusMsg =
-      scan.status === "pending"
-        ? "Cloning repository..."
-        : "Running security scanners...";
+  if (scan?.status === "pending") {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-6 bg-gray-950 text-white">
         <div className="bg-gray-900 border border-indigo-500/20 rounded-xl p-10 max-w-lg w-full text-center space-y-6 shadow-2xl">
@@ -226,7 +222,7 @@ export default function ScanPage({ params }: { params: { id: string } }) {
             <Spinner size="w-12 h-12" />
           </div>
           <div className="space-y-2">
-            <h2 className="text-xl font-semibold text-white">{statusMsg}</h2>
+            <h2 className="text-xl font-semibold text-white">Cloning repository...</h2>
             <p className="text-sm text-gray-400 break-all">{scan.repo_url}</p>
           </div>
           <p className="text-xs text-gray-500 pt-4">
@@ -236,6 +232,37 @@ export default function ScanPage({ params }: { params: { id: string } }) {
       </div>
     );
   }
+
+  if (scan?.status === "running") {
+    const pct = scan.progress ?? 0;
+    const step = scan.current_step ?? "Initializing...";
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-6 bg-gray-950 text-white">
+        <div className="bg-gray-900 border border-indigo-500/20 rounded-xl p-10 max-w-lg w-full text-center space-y-6 shadow-2xl">
+          <p className="text-sm text-gray-400 break-all">{scan.repo_url}</p>
+          <h2 className="text-xl font-semibold text-white">Scanning repository...</h2>
+
+          {/* Progress bar */}
+          <div className="w-full bg-gray-800 rounded-full h-3">
+            <div
+              className="bg-indigo-500 rounded-full h-3 transition-all duration-500"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+
+          {/* Percentage + current step label */}
+          <div className="flex justify-between">
+            <span className="text-sm font-mono text-indigo-400">{pct}%</span>
+            <span className="text-sm text-gray-400">{step}</span>
+          </div>
+
+          {/* Pulsing dot */}
+          <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse mx-auto mt-4" />
+        </div>
+      </div>
+    );
+  }
+
 
   if (scan?.status === "failed") {
     return (
