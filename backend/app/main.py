@@ -27,7 +27,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
-        "https://breakmyapp-production-2f29.up.railway.app",
+        "https://breakmyapp.tech",
+        "https://www.breakmyapp.tech",
+        "https://api.breakmyapp.tech",
     ],
     allow_credentials=True,
     allow_methods=["*"],
