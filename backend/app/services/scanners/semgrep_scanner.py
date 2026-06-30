@@ -3,6 +3,7 @@ import json
 import logging
 import subprocess
 from typing import Dict, Any
+from app.services.scanners.fp_utils import is_firebase_client_config
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +106,37 @@ def scan_semgrep(repo_path: str) -> Dict[str, Any]:
                 "category": metadata.get("category", "general"),
                 "cwe": metadata.get("cwe", [])
             }
+
+            # ------------------------------------------------------------------
+            # Firebase client config false-positive suppression
+            # Only runs for findings whose rule_id suggests a generic or Google
+            # API-key detection. Reads the matched line to confirm the AIzaSy
+            # prefix before invoking the heavier file-context check.
+            # ------------------------------------------------------------------
+            _rule_id_lower = finding["rule_id"].lower()
+            if "detected-generic-api-key" in _rule_id_lower or "google" in _rule_id_lower:
+                _abs_path = raw_path  # raw_path is already absolute (Semgrep uses full paths)
+                _line_start = finding["line_start"]
+                _has_aizasy = False
+                try:
+                    if _abs_path:
+                        with open(_abs_path, "r", encoding="utf-8", errors="replace") as _fh:
+                            _src_lines = _fh.readlines()
+                        _src_line_idx = max(0, _line_start - 1)  # 0-indexed
+                        if _src_line_idx < len(_src_lines):
+                            _has_aizasy = "AIzaSy" in _src_lines[_src_line_idx]
+                except Exception:
+                    pass  # fail safe — keep original severity
+
+                if _has_aizasy:
+                    _is_firebase, _note = is_firebase_client_config(_abs_path, _line_start)
+                    if _is_firebase:
+                        finding["severity"] = "INFO"
+                        finding["message"] = (
+                            finding["message"]
+                            + " [Verified: Firebase Web SDK client key, safe to expose publicly]"
+                        )
+
             result["findings"].append(finding)
 
         result["status"] = "completed"
