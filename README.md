@@ -50,7 +50,7 @@ Results can be consumed via:
 +------------------------+--------------------------------+
                          | HTTP
 +------------------------v--------------------------------+
-|               Backend API (FastAPI · Python 3.11)        |
+|               Backend API (FastAPI · Python 3.11)       |
 |  /api/v1/scans   /api/v1/github   /api/v1/auth          |
 +-------+-----------------------------------+-------------+
         | Enqueue Task                      | Store Results
@@ -62,8 +62,8 @@ Results can be consumed via:
 +-------v--------------------------------------------------------+
 |                   Scanner Pipeline                              |
 |                                                                 |
-|  TruffleHog (Secrets) · Semgrep (Security)                     |
-|  Bandit (Python Code Quality) · pip-audit (Deps)               |
+|  TruffleHog (Secrets) · Semgrep (Security)                      | 
+|  Bandit (Python Code Quality) · pip-audit (Deps)                |
 |                                                                 |
 |  -> Gemini AI Explanation & Prioritization                      |
 |  -> MinIO Artifact Storage                                      |
