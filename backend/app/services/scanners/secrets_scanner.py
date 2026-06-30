@@ -88,8 +88,51 @@ def scan_secrets(repo_path: str) -> Dict[str, Any]:
                     "line": int(line_number) if line_number else 0,
                     "raw": masked_secret
                 }
+
+                # ----------------------------------------------------------
+                # Firebase client config false-positive suppression
+                # If the detector looks like a Google/Gemini key AND the raw
+                # secret has the AIzaSy prefix, check whether it lives inside
+                # a Firebase Web SDK config object (safe to expose publicly).
+                # ----------------------------------------------------------
+                _detector_str = f"{detector_type} {detector}".lower()
+                if ("google" in _detector_str or "gemini" in _detector_str) and raw_secret.startswith("AIzaSy"):
+                    try:
+                        # file_path from TruffleHog is an absolute path when
+                        # scanning a filesystem directory directly.
+                        with open(file_path, "r", encoding="utf-8", errors="replace") as _fh:
+                            _file_lines = _fh.readlines()
+
+                        _match_line = (int(line_number) if line_number else 1) - 1  # 0-indexed
+                        _window_start = max(0, _match_line - 10)
+                        _window_end = min(len(_file_lines), _match_line + 11)
+                        _context = "".join(_file_lines[_window_start:_window_end])
+
+                        _firebase_sibling_keys = [
+                            "authDomain",
+                            "projectId",
+                            "storageBucket",
+                            "messagingSenderId",
+                            "appId",
+                        ]
+                        _siblings_found = sum(1 for k in _firebase_sibling_keys if k in _context)
+
+                        if _siblings_found >= 2:
+                            # Confirmed Firebase Web SDK client config — not a secret leak
+                            finding["severity"] = "INFO"
+                            finding["detector"] = "FirebaseClientConfigKey (not a security issue)"
+                            finding["note"] = (
+                                "This is a Firebase Web SDK client key, which is safe to expose "
+                                "publicly. Firebase security relies on Firebase Security Rules and "
+                                "authorized domains, not on hiding this key. See: "
+                                "https://firebase.google.com/docs/projects/api-keys"
+                            )
+                    except Exception as _e:
+                        # Fail safe: if file can't be read, keep CRITICAL severity unchanged
+                        logger.debug(f"Firebase config check failed for {file_path}: {_e}")
+
                 result["findings"].append(finding)
-                
+
             except Exception as e:
                 logger.debug(f"Error extracting data from trufflehog JSON: {e}")
                 continue

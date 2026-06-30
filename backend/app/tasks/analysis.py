@@ -100,7 +100,7 @@ async def _run_full_analysis(scan_id: str) -> None:
             semgrep = scan_semgrep(repo_path)
             await update_progress(session_factory, scan_uuid, 55, "Running Bandit code quality scanner...")
 
-            bandit = scan_bandit(repo_path)
+            bandit = scan_bandit(repo_path, repo_url)
             await update_progress(session_factory, scan_uuid, 68, "Running dependency vulnerability scanner...")
 
             dependencies = scan_dependencies(repo_path)

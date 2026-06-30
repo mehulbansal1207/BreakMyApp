@@ -45,8 +45,8 @@ def scan_semgrep(repo_path: str) -> Dict[str, Any]:
                 "--config", "auto",
                 "--json",
                 "--no-rewrite-rule-ids",
-                "--timeout", "30",
-                "--max-memory", "1500",
+                "--timeout", "60",
+                "--max-memory", "3000",
                 "--quiet",
                 "--exclude", "node_modules",
                 "--exclude", "*.lock",
@@ -63,7 +63,7 @@ def scan_semgrep(repo_path: str) -> Dict[str, Any]:
             ],
             capture_output=True,
             text=True,
-            timeout=120
+            timeout=240
         )
 
         try:
@@ -113,7 +113,7 @@ def scan_semgrep(repo_path: str) -> Dict[str, Any]:
 
     except subprocess.TimeoutExpired:
         logger.error(f"Semgrep scan timed out for {repo_path}")
-        result["error"] = "Semgrep scan timed out after 120 seconds"
+        result["error"] = "Semgrep scan timed out after 240 seconds"
     except FileNotFoundError:
         logger.error("Semgrep binary not found")
         result["error"] = "semgrep binary not found or not installed"
