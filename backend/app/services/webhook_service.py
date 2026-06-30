@@ -3,8 +3,8 @@ import logging
 import time
 import datetime
 from typing import Any
-from urllib import request as urllib_request
-from urllib.error import URLError
+
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ def build_webhook_payload(scan_id: str, scan: Any) -> dict:
         "repo_url": scan.repo_url,
         "status": scan.status,
         "score": scan.score,
-        "report_url": f"https://breakmyapp-production-2f29.up.railway.app/scan/{scan.id}",
+        "report_url": f"https://breakmyapp.tech/scan/{scan.id}",
         "findings_summary": {
             "secrets": findings.get("secrets", {}).get("findings_count", 0),
             "security": findings.get("semgrep", {}).get("findings_count", 0),
@@ -45,48 +45,38 @@ def fire_webhook(scan_id: str, callback_url: str, payload: dict) -> bool:
     Returns False if all attempts fail.
     Never raises — all exceptions caught internally.
     """
-    body: bytes = json.dumps(payload).encode("utf-8")
     max_attempts: int = 3
 
     for attempt in range(1, max_attempts + 1):
         try:
-            req = urllib_request.Request(
-                url=callback_url,
-                data=body,
-                method="POST",
+            response = requests.post(
+                callback_url,
+                json=payload,
                 headers={
                     "Content-Type": "application/json",
                     "User-Agent": "BreakMyApp-Webhook/1.0",
                 },
+                timeout=10,
             )
-            with urllib_request.urlopen(req, timeout=10) as response:
-                status: int = response.status
-                if 200 <= status <= 299:
-                    logger.info(
-                        "Webhook delivered successfully for scan %s to %s (attempt %d, status %d).",
-                        scan_id,
-                        callback_url,
-                        attempt,
-                        status,
-                    )
-                    return True
-                else:
-                    logger.warning(
-                        "Webhook attempt %d for scan %s returned non-2xx status %d.",
-                        attempt,
-                        scan_id,
-                        status,
-                    )
-        except URLError as exc:
+            if 200 <= response.status_code <= 299:
+                logger.info(
+                    "Webhook delivered successfully for scan %s to %s (attempt %d, status %d).",
+                    scan_id,
+                    callback_url,
+                    attempt,
+                    response.status_code,
+                )
+                return True
+            else:
+                logger.warning(
+                    "Webhook attempt %d for scan %s returned non-2xx status %d.",
+                    attempt,
+                    scan_id,
+                    response.status_code,
+                )
+        except requests.RequestException as exc:
             logger.warning(
-                "Webhook attempt %d for scan %s failed with URLError: %s.",
-                attempt,
-                scan_id,
-                exc,
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "Webhook attempt %d for scan %s raised unexpected error: %s.",
+                "Webhook attempt %d for scan %s failed: %s.",
                 attempt,
                 scan_id,
                 exc,

@@ -125,8 +125,8 @@ def scan_semgrep(repo_path: str) -> Dict[str, Any]:
                         _src_line_idx = max(0, _line_start - 1)  # 0-indexed
                         if _src_line_idx < len(_src_lines):
                             _has_aizasy = "AIzaSy" in _src_lines[_src_line_idx]
-                except Exception:
-                    pass  # fail safe — keep original severity
+                except Exception as e:
+                    logger.debug(f"Could not read source line for Firebase FP check on {_abs_path}: {e}")
 
                 if _has_aizasy:
                     _is_firebase, _note = is_firebase_client_config(_abs_path, _line_start)
