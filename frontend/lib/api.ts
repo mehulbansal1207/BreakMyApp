@@ -1,4 +1,4 @@
-import { ScanResponse, UserResponse } from "@/types/scan";
+import { ScanResponse, ScanShareResponse, UserResponse } from "@/types/scan";
 import { getAuthToken } from "@/lib/auth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -40,6 +40,17 @@ export async function getScan(id: string): Promise<ScanResponse> {
   }
 
   return res.json() as Promise<ScanResponse>;
+}
+
+export async function getShareScan(shareToken: string): Promise<ScanShareResponse> {
+  const res = await fetch(`${API_BASE}/api/v1/scans/share/${shareToken}`);
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Failed to fetch shared scan (${res.status}): ${body}`);
+  }
+
+  return res.json() as Promise<ScanShareResponse>;
 }
 
 export async function listScans(limit: number = 20): Promise<ScanResponse[]> {

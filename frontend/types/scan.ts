@@ -129,6 +129,7 @@ export interface Findings {
 export interface ScanResponse {
   id: string;
   repo_url: string;
+  share_token: string;
   status: "pending" | "running" | "completed" | "failed";
   score: number | null;
   findings: Findings | null;
@@ -136,6 +137,25 @@ export interface ScanResponse {
   updated_at: string;
   progress?: number;
   current_step?: string;
+}
+
+export interface ScanShareResponse {
+  share_token: string;
+  repo_url: string;
+  status: "pending" | "running" | "completed" | "failed";
+  score: number | null;
+  top_priorities: AiPriority[];
+  executive_summary: string;
+  score_explanation: string;
+  category_summaries: Partial<AiCategorySummaries>;
+  findings_summary: {
+    secrets: number;
+    security: number;
+    code_quality: number;
+    dependencies: number;
+    custom: number;
+  };
+  created_at: string;
 }
 
 export interface UserResponse {

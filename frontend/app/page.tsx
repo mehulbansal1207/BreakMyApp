@@ -41,6 +41,11 @@ export default function Home() {
     setIsLoading(true);
     try {
       const scan = await createScan(url);
+      try {
+        localStorage.setItem(`bma_share_${scan.id}`, scan.share_token);
+      } catch {
+        // storage unavailable — non-fatal, share redirect just won't work later
+      }
       router.push(`/scan/${scan.id}`);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to start scan.";

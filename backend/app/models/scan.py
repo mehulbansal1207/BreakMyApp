@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import secrets
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -36,6 +37,15 @@ class Scan(Base):
     # Optional webhook callback URL — POSTed to when scan completes
     callback_url: Mapped[Optional[str]] = mapped_column(
         String, nullable=True, default=None
+    )
+
+    # Unguessable public share token — safe to expose, never contains secrets
+    share_token: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        unique=True,
+        index=True,
+        default=lambda: secrets.token_hex(32)
     )
 
     # Progress of the scan (0 to 100)
