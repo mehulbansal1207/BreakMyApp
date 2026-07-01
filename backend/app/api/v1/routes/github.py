@@ -47,7 +47,7 @@ async def post_github_report(
     scan_summary = {
         "score": scan.score,
         "repo_url": scan.repo_url,
-        "report_url": f"https://breakmyapp-production-2f29.up.railway.app/scan/{scan.id}",
+        "report_url": f"https://breakmyapp.tech/scan/{scan.id}",
         "findings_summary": {
             "secrets": findings.get("secrets", {}).get("findings_count", 0),
             "security": findings.get("semgrep", {}).get("findings_count", 0),
@@ -133,7 +133,7 @@ async def create_issues_for_scan(
     # Build scan_summary
     scan_summary = {
         "score": scan.score,
-        "report_url": f"https://breakmyapp-production-2f29.up.railway.app/scan/{scan.id}",
+        "report_url": f"https://breakmyapp.tech/scan/{scan.id}",
         "executive_summary": scan.findings.get("ai_explanation", {}).get("executive_summary", ""),
         "top_priorities": scan.findings.get("ai_explanation", {}).get("top_priorities", []),
         "findings_summary": {

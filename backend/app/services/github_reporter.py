@@ -60,7 +60,7 @@ def _build_pr_comment(scan_summary: dict) -> str:
     lines.append("---")
     lines.append(
         f"📊 [View Full Report]({report_url}) | "
-        "🔧 Powered by [BreakMyApp](https://breakmyapp-production-2f29.up.railway.app)"
+        "🔧 Powered by [BreakMyApp](https://breakmyapp.tech)"
     )
 
     return "\n".join(lines)
@@ -179,7 +179,7 @@ def _build_issue_body(category: str, finding: dict, scan_summary: dict) -> str:
         "",
         "---",
         f"🔗 [View Full Scan Report]({report_url})",
-        "*Detected by [BreakMyApp](https://breakmyapp-production-2f29.up.railway.app)*",
+        "*Detected by [BreakMyApp](https://breakmyapp.tech)*",
     ]
 
     return "\n".join(lines)

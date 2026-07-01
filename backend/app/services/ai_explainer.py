@@ -54,7 +54,7 @@ def _build_user_prompt(findings: dict, score: int) -> str:
         for sf in secrets_findings[:5]:
             parts.append(
                 f"- Severity: {sf.get('severity', 'UNKNOWN')} | "
-                f"Type: {sf.get('detector_name', sf.get('rule_id', 'unknown'))} | "
+                f"Type: {sf.get('detector', sf.get('rule_id', 'unknown'))} | "
                 f"File: {sf.get('file', 'unknown')}"
             )
     parts.append("")
@@ -157,11 +157,11 @@ def _strip_code_fences(text: str) -> str:
 
 
 def explain_findings(findings: dict, score: int) -> Dict[str, Any]:
-    """Use Claude to generate plain-English explanations of scanner findings.
+    """Use Gemini to generate plain-English explanations of scanner findings.
 
     Takes the complete findings dictionary produced by the analysis pipeline
-    and the computed production-readiness score, sends them to the Anthropic
-    Claude API, and returns structured explanations including an executive
+    and the computed production-readiness score, sends them to the Gemini
+    API, and returns structured explanations including an executive
     summary, prioritised recommendations, and per-category summaries.
 
     This layer is optional — the platform works without it.  If the API key
