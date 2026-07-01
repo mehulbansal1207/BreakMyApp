@@ -1,0 +1,10 @@
+# Exclude sensitive and unnecessary files from the Docker image
+firebase-service-account.json
+.env
+__pycache__
+.git
+*.pyc
+.pytest_cache
+.env.local
+*.egg-info
+.mypy_cache
