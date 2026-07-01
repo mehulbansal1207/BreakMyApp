@@ -149,6 +149,8 @@ export default function ShareScanPage({ params }: { params: { token: string } })
 
   // ── Completed scan — limited public view ──────────────────────────────────
 
+  if (!scan) return null;
+
   const scoreColor = (scan.score ?? 0) >= 80
     ? "#22c55e"
     : (scan.score ?? 0) >= 60
