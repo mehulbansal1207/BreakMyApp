@@ -9,6 +9,7 @@ from app.models.scan import Scan
 from app.services.github_reporter import run_github_report, create_github_issues
 from app.core.config import settings
 from app.core.auth import get_current_user
+from app.core.limiter import check_rate_limit
 
 router = APIRouter(prefix="/github", tags=["github"])
 
@@ -18,6 +19,10 @@ class GithubReportRequest(BaseModel):
     owner: str
     repo: str
     pr_number: int
+
+
+class GithubCreateIssuesRequest(BaseModel):
+    token: str
 
 
 @router.post("/report/{scan_id}")
@@ -74,9 +79,18 @@ async def post_github_report(
 @router.post("/scans/{scan_id}/create-issues")
 async def create_issues_for_scan(
     scan_id: UUID,
+    request: GithubCreateIssuesRequest,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
+    # Rate limit: 5 issue-creation requests per user per hour
+    await check_rate_limit(
+        identifier=str(current_user.id),
+        key_prefix="ratelimit:issues",
+        limit=5,
+        window_seconds=3600,
+    )
+
     # Fetch scan
     result = await db.execute(select(Scan).where(Scan.id == scan_id))
     scan = result.scalar_one_or_none()
@@ -123,13 +137,6 @@ async def create_issues_for_scan(
             detail="Could not parse GitHub repository from scan URL"
         )
 
-    # Check token is configured
-    if not settings.GITHUB_TOKEN:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="GitHub integration not configured"
-        )
-
     # Build scan_summary
     scan_summary = {
         "score": scan.score,
@@ -144,9 +151,9 @@ async def create_issues_for_scan(
         },
     }
 
-    # Create GitHub issues
+    # Create GitHub issues using the caller's own GitHub token
     issues_created = await create_github_issues(
-        token=settings.GITHUB_TOKEN,
+        token=request.token,
         owner=owner,
         repo=repo,
         scan_summary=scan_summary,
@@ -158,3 +165,4 @@ async def create_issues_for_scan(
         "repo": f"{owner}/{repo}",
         "scan_id": str(scan.id),
     }
+

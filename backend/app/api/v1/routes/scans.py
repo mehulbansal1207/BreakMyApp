@@ -55,7 +55,7 @@ async def create_scan(
     current_user: Optional[User] = Depends(get_optional_user),
 ):
     ip = request.client.host if request.client else "unknown"
-    await check_rate_limit(ip)
+    await check_rate_limit(identifier=ip, key_prefix="ratelimit", limit=5, window_seconds=3600)
 
     new_scan = Scan(
         repo_url=scan_in.repo_url,

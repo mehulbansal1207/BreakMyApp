@@ -138,7 +138,7 @@ def _build_issue_body(category: str, finding: dict, scan_summary: dict) -> str:
     report_url = scan_summary.get("report_url", "")
 
     if category == "secrets":
-        message = f"{finding.get('detector', 'Unknown')} credential detected. Raw preview: `{finding.get('raw', '')}`"
+        message = f"{finding.get('detector', 'Unknown')} credential detected. View the full scan report for details (raw value is not included here for security reasons)."
         cat_label = "Secrets & Credentials"
     elif category == "semgrep":
         message = finding.get("message", "")
@@ -190,12 +190,15 @@ async def create_github_issues(
     owner: str,
     repo: str,
     scan_summary: dict,
-    findings: dict
+    findings: dict,
+    severity_filter: set[str] = {"HIGH", "CRITICAL"},
+    max_issues: int = 10,
 ) -> int:
     """
-    Creates GitHub Issues for all HIGH and CRITICAL findings.
+    Creates GitHub Issues for findings matching the severity filter.
 
     Returns the count of issues successfully created.
+    Stops after max_issues have been created (across all categories combined).
     """
     url = f"{GITHUB_API_BASE}/repos/{owner}/{repo}/issues"
     headers = {
@@ -210,34 +213,47 @@ async def create_github_issues(
         "dependencies": findings.get("dependencies", {}).get("findings", []),
     }
 
+    # Flatten and filter all findings upfront so a single loop enforces
+    # the cap across all categories combined (not per-category).
+    filtered_findings: list[tuple[str, dict]] = []
+    for category, category_findings in category_map.items():
+        for finding in category_findings:
+            severity = finding.get("severity", "").upper()
+            if not severity:
+                continue
+            if severity not in severity_filter:
+                continue
+            filtered_findings.append((category, finding))
+
     issues_created = 0
 
     async with httpx.AsyncClient() as client:
-        for category, category_findings in category_map.items():
-            for finding in category_findings:
-                severity = finding.get("severity", "").upper()
-                if not severity:
-                    continue
+        for category, finding in filtered_findings:
+            if issues_created >= max_issues:
+                logger.info(
+                    "Reached issue creation cap (%d). Stopping.", max_issues
+                )
+                break
 
-                title = _build_issue_title(category, finding)
-                body = _build_issue_body(category, finding, scan_summary)
-                payload = {"title": title, "body": body}
+            title = _build_issue_title(category, finding)
+            body = _build_issue_body(category, finding, scan_summary)
+            payload = {"title": title, "body": body}
 
-                try:
-                    response = await client.post(url, headers=headers, json=payload, timeout=15)
-                    if response.is_success:
-                        issues_created += 1
-                        logger.info(f"Created GitHub issue: {title}")
-                    else:
-                        logger.error(
-                            f"Failed to create issue '{title}': "
-                            f"{response.status_code} {response.text}"
-                        )
-                except Exception as e:
-                    logger.error(f"Exception creating issue '{title}': {e}")
+            try:
+                response = await client.post(url, headers=headers, json=payload, timeout=15)
+                if response.is_success:
+                    issues_created += 1
+                    logger.info(f"Created GitHub issue: {title}")
+                else:
+                    logger.error(
+                        f"Failed to create issue '{title}': "
+                        f"{response.status_code} {response.text}"
+                    )
+            except Exception as e:
+                logger.error(f"Exception creating issue '{title}': {e}")
 
-                # Delay to avoid GitHub rate limiting
-                await asyncio.sleep(0.5)
+            # Delay to avoid GitHub rate limiting
+            await asyncio.sleep(0.5)
 
     return issues_created
 
