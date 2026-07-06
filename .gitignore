@@ -59,3 +59,4 @@ backend/.cache/
 .cache/
 
 backend/firebase-service-account.json
+backend/celerybeat-schedule
