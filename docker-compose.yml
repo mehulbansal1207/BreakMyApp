@@ -86,7 +86,28 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: breakmyapp-worker
-    command: celery -A app.celery_app worker --loglevel=info
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=1
+    volumes:
+      - ./backend:/app
+      - ./backend/firebase-service-account.json:/app/firebase-service-account.json:ro
+    env_file:
+      - .env
+    environment:
+      - FIREBASE_SERVICE_ACCOUNT_JSON_FILE=/app/firebase-service-account.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: breakmyapp-beat
+    command: celery -A app.celery_app beat --loglevel=info
     volumes:
       - ./backend:/app
       - ./backend/firebase-service-account.json:/app/firebase-service-account.json:ro

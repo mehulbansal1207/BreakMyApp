@@ -3,6 +3,7 @@ import logging
 from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from celery.exceptions import SoftTimeLimitExceeded
 from app.celery_app import celery_app
 from app.core.config import settings
 from app.models.scan import Scan
@@ -189,6 +190,25 @@ async def _run_full_analysis(scan_id: str) -> None:
             except Exception as e:
                 logger.warning(f"MinIO upload error for scan {scan_id}: {e}")
 
+        # NOTE: The HARD time limit (task_time_limit=600) sends SIGKILL and
+        # gives no opportunity for any Python exception handling or cleanup to
+        # run at all — cleanup_repo() will NOT fire in that case, and the DB
+        # row will remain stuck at "running" until the reaper
+        # (reap_stale_scans, runs every 5 min, 15-min staleness threshold)
+        # cleans it up.  The soft limit handler below is a best-effort
+        # improvement for the more common case, not a complete guarantee.
+        except SoftTimeLimitExceeded:
+            logger.error(
+                f"Scan {scan_id} hit the soft time limit (task_soft_time_limit)."
+            )
+            findings = {
+                "error": (
+                    "Scan exceeded the maximum allowed time (9 minutes) "
+                    "and was stopped."
+                )
+            }
+            score = 0
+            status = "failed"
         except RuntimeError as e:
             logger.error(f"Analysis failed for scan {scan_id}: {e}")
             findings = {"error": str(e)}
