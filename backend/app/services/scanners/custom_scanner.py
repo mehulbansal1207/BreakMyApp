@@ -22,31 +22,73 @@ rules:
 
   # 1. Server-Side Template Injection (SSTI) --------------------------------
   - id: custom-ssti-jinja2
-    patterns:
-      - pattern: |
-          flask.render_template_string($TMPL, ...)
-      - pattern-either:
-          - pattern-inside: |
-              $TMPL = flask.request.args.get(...)
-              ...
-          - pattern-inside: |
-              $TMPL = flask.request.args[...]
-              ...
-          - pattern-inside: |
-              $TMPL = flask.request.form.get(...)
-              ...
-          - pattern-inside: |
-              $TMPL = flask.request.form[...]
-              ...
-          - pattern-inside: |
-              $TMPL = flask.request.json.get(...)
-              ...
-          - pattern-inside: |
-              $TMPL = flask.request.json[...]
-              ...
-          - pattern-inside: |
-              $TMPL = flask.request.data
-              ...
+    pattern-either:
+      # Qualified inline
+      - pattern: flask.render_template_string(flask.request.args.get(...), ...)
+      - pattern: flask.render_template_string(flask.request.args[...], ...)
+      - pattern: flask.render_template_string(flask.request.form.get(...), ...)
+      - pattern: flask.render_template_string(flask.request.form[...], ...)
+      - pattern: flask.render_template_string(flask.request.json.get(...), ...)
+      - pattern: flask.render_template_string(flask.request.json[...], ...)
+      - pattern: flask.render_template_string(flask.request.data, ...)
+      # Unqualified inline
+      - pattern: render_template_string(request.args.get(...), ...)
+      - pattern: render_template_string(request.args[...], ...)
+      - pattern: render_template_string(request.form.get(...), ...)
+      - pattern: render_template_string(request.form[...], ...)
+      - pattern: render_template_string(request.json.get(...), ...)
+      - pattern: render_template_string(request.json[...], ...)
+      - pattern: render_template_string(request.data, ...)
+      # Qualified variable-assigned
+      - patterns:
+          - pattern: flask.render_template_string($TMPL, ...)
+          - pattern-either:
+              - pattern-inside: |
+                  $TMPL = flask.request.args.get(...)
+                  ...
+              - pattern-inside: |
+                  $TMPL = flask.request.args[...]
+                  ...
+              - pattern-inside: |
+                  $TMPL = flask.request.form.get(...)
+                  ...
+              - pattern-inside: |
+                  $TMPL = flask.request.form[...]
+                  ...
+              - pattern-inside: |
+                  $TMPL = flask.request.json.get(...)
+                  ...
+              - pattern-inside: |
+                  $TMPL = flask.request.json[...]
+                  ...
+              - pattern-inside: |
+                  $TMPL = flask.request.data
+                  ...
+      # Unqualified variable-assigned
+      - patterns:
+          - pattern: render_template_string($TMPL, ...)
+          - pattern-either:
+              - pattern-inside: |
+                  $TMPL = request.args.get(...)
+                  ...
+              - pattern-inside: |
+                  $TMPL = request.args[...]
+                  ...
+              - pattern-inside: |
+                  $TMPL = request.form.get(...)
+                  ...
+              - pattern-inside: |
+                  $TMPL = request.form[...]
+                  ...
+              - pattern-inside: |
+                  $TMPL = request.json.get(...)
+                  ...
+              - pattern-inside: |
+                  $TMPL = request.json[...]
+                  ...
+              - pattern-inside: |
+                  $TMPL = request.data
+                  ...
     message: >
       Potential Server-Side Template Injection (SSTI): user-controlled input is
       passed directly to render_template_string(). An attacker can execute
@@ -191,16 +233,16 @@ rules:
   - id: custom-nosql-injection-python
     patterns:
       - pattern-either:
-          - pattern: $COL.find({"$KEY": flask.request.args.get(...)})
-          - pattern: $COL.find({"$KEY": flask.request.args[...]})
-          - pattern: $COL.find({"$KEY": flask.request.json.get(...)})
-          - pattern: $COL.find({"$KEY": flask.request.json[...]})
-          - pattern: $COL.find_one({"$KEY": flask.request.args.get(...)})
-          - pattern: $COL.find_one({"$KEY": flask.request.json.get(...)})
-          - pattern: $COL.update_one({"$KEY": flask.request.args.get(...)}, ...)
-          - pattern: $COL.update_one({"$KEY": flask.request.json.get(...)}, ...)
-          - pattern: $COL.delete_one({"$KEY": flask.request.args.get(...)})
-          - pattern: $COL.delete_one({"$KEY": flask.request.json.get(...)})
+          - pattern: '$COL.find({"$KEY": flask.request.args.get(...)})'
+          - pattern: '$COL.find({"$KEY": flask.request.args[...]})'
+          - pattern: '$COL.find({"$KEY": flask.request.json.get(...)})'
+          - pattern: '$COL.find({"$KEY": flask.request.json[...]})'
+          - pattern: '$COL.find_one({"$KEY": flask.request.args.get(...)})'
+          - pattern: '$COL.find_one({"$KEY": flask.request.json.get(...)})'
+          - pattern: '$COL.update_one({"$KEY": flask.request.args.get(...)}, ...)'
+          - pattern: '$COL.update_one({"$KEY": flask.request.json.get(...)}, ...)'
+          - pattern: '$COL.delete_one({"$KEY": flask.request.args.get(...)})'
+          - pattern: '$COL.delete_one({"$KEY": flask.request.json.get(...)})'
     message: >
       Potential NoSQL Injection: a MongoDB query is constructed using
       unsanitised user input from the request. An attacker can manipulate
@@ -214,14 +256,14 @@ rules:
   - id: custom-nosql-injection-javascript
     patterns:
       - pattern-either:
-          - pattern: $COL.find({$KEY: req.query.$VAL})
-          - pattern: $COL.find({$KEY: req.body.$VAL})
-          - pattern: $COL.findOne({$KEY: req.query.$VAL})
-          - pattern: $COL.findOne({$KEY: req.body.$VAL})
-          - pattern: $COL.updateOne({$KEY: req.query.$VAL}, ...)
-          - pattern: $COL.updateOne({$KEY: req.body.$VAL}, ...)
-          - pattern: $COL.deleteOne({$KEY: req.query.$VAL})
-          - pattern: $COL.deleteOne({$KEY: req.body.$VAL})
+          - pattern: '$COL.find({$KEY: req.query.$VAL})'
+          - pattern: '$COL.find({$KEY: req.body.$VAL})'
+          - pattern: '$COL.findOne({$KEY: req.query.$VAL})'
+          - pattern: '$COL.findOne({$KEY: req.body.$VAL})'
+          - pattern: '$COL.updateOne({$KEY: req.query.$VAL}, ...)'
+          - pattern: '$COL.updateOne({$KEY: req.body.$VAL}, ...)'
+          - pattern: '$COL.deleteOne({$KEY: req.query.$VAL})'
+          - pattern: '$COL.deleteOne({$KEY: req.body.$VAL})'
     message: >
       Potential NoSQL Injection: a MongoDB query is constructed using
       unsanitised request data. Validate and sanitise all query fields
@@ -256,7 +298,6 @@ rules:
     patterns:
       - pattern-either:
           - pattern: jwt.encode($PAYLOAD, ...)
-          - pattern: PyJWT.encode($PAYLOAD, ...)
       - pattern-not-inside: |
           $PAYLOAD = {..., "exp": ..., ...}
           ...
@@ -278,8 +319,8 @@ rules:
   - id: custom-jwt-no-exp-javascript
     patterns:
       - pattern: jwt.sign($PAYLOAD, $SECRET)
-      - pattern-not: jwt.sign($PAYLOAD, $SECRET, {expiresIn: ...})
-      - pattern-not: jwt.sign($PAYLOAD, $SECRET, {..., expiresIn: ..., ...})
+      - pattern-not: 'jwt.sign($PAYLOAD, $SECRET, {expiresIn: ...})'
+      - pattern-not: 'jwt.sign($PAYLOAD, $SECRET, {..., expiresIn: ..., ...})'
     message: >
       jwt.sign() called without an expiresIn option. Tokens without expiry are
       valid indefinitely, enabling replay attacks. Pass {expiresIn: '...'} as

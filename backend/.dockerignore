@@ -8,3 +8,4 @@ __pycache__
 .env.local
 *.egg-info
 .mypy_cache
+app/services/scanners/test_fixtures/
