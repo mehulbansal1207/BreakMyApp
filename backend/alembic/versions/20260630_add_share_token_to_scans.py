@@ -14,6 +14,11 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Ensure pgcrypto is available for gen_random_bytes() below —
+    # without this, this migration fails with UndefinedFunctionError
+    # on any DB where pgcrypto isn't already enabled (hit twice: prod + local dev)
+    op.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto;")
+
     # Add share_token column — nullable first so existing rows don't fail
     op.add_column('scans', sa.Column('share_token', sa.String(64), nullable=True))
     

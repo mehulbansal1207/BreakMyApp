@@ -191,14 +191,12 @@ async def create_github_issues(
     repo: str,
     scan_summary: dict,
     findings: dict,
-    severity_filter: set[str] = {"HIGH", "CRITICAL"},
-    max_issues: int = 10,
 ) -> int:
     """
-    Creates GitHub Issues for findings matching the severity filter.
+    Creates GitHub Issues for ALL findings regardless of severity, with no
+    limit on issue count.
 
     Returns the count of issues successfully created.
-    Stops after max_issues have been created (across all categories combined).
     """
     url = f"{GITHUB_API_BASE}/repos/{owner}/{repo}/issues"
     headers = {
@@ -213,28 +211,20 @@ async def create_github_issues(
         "dependencies": findings.get("dependencies", {}).get("findings", []),
     }
 
-    # Flatten and filter all findings upfront so a single loop enforces
-    # the cap across all categories combined (not per-category).
-    filtered_findings: list[tuple[str, dict]] = []
+    # Flatten ALL findings from every category into a single list.
+    # Skip findings with a missing/empty severity value (data validity check only).
+    all_findings: list[tuple[str, dict]] = []
     for category, category_findings in category_map.items():
         for finding in category_findings:
             severity = finding.get("severity", "").upper()
             if not severity:
                 continue
-            if severity not in severity_filter:
-                continue
-            filtered_findings.append((category, finding))
+            all_findings.append((category, finding))
 
     issues_created = 0
 
     async with httpx.AsyncClient() as client:
-        for category, finding in filtered_findings:
-            if issues_created >= max_issues:
-                logger.info(
-                    "Reached issue creation cap (%d). Stopping.", max_issues
-                )
-                break
-
+        for category, finding in all_findings:
             title = _build_issue_title(category, finding)
             body = _build_issue_body(category, finding, scan_summary)
             payload = {"title": title, "body": body}

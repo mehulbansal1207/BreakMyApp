@@ -32,6 +32,7 @@ export default function ScanPage({ params }: { params: { id: string } }) {
     issues_created: number;
     repo: string;
   } | null>(null);
+  const [issuesError, setIssuesError] = useState<string | null>(null);
 
   const isLoggedIn = user !== null;
 
@@ -214,25 +215,37 @@ export default function ScanPage({ params }: { params: { id: string } }) {
     if (!scan) return;
     setIssuesLoading(true);
     setIssuesResult(null);
+    setIssuesError(null);
     try {
-      const token = await getAuthToken();
+      const authToken = await getAuthToken();
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/v1/github/scans/${scan.id}/create-issues`,
         {
           method: 'POST',
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${authToken}` },
         }
       );
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || 'Failed to create issues');
+        let realMessage = 'Failed to create issues';
+        try {
+          const errBody = await res.json();
+          if (Array.isArray(errBody.detail)) {
+            // FastAPI 422 validation error — detail is an array of objects with .msg
+            realMessage = errBody.detail.map((e: { msg: string }) => e.msg).join('; ');
+          } else if (typeof errBody.detail === 'string') {
+            realMessage = errBody.detail;
+          }
+        } catch {
+          // Response body wasn't JSON — keep the generic fallback
+        }
+        setIssuesError(realMessage);
+        return;
       }
       const data = await res.json();
       setIssuesResult(data);
     } catch (err) {
-      console.error('Create issues failed:', err);
-      // Show error in issuesResult as negative count
-      setIssuesResult({ issues_created: -1, repo: '' });
+      console.error('Create issues failed:', err instanceof Error ? err.message : 'Unknown error');
+      setIssuesError(err instanceof Error ? err.message : 'Failed to create issues');
     } finally {
       setIssuesLoading(false);
     }
@@ -709,7 +722,7 @@ export default function ScanPage({ params }: { params: { id: string } }) {
             <div className="border-t border-gray-700 pt-4 space-y-3">
               <p className="text-gray-400 text-xs">
                 Post findings directly to the repository as GitHub Issues.
-                All findings are posted.
+                Only HIGH and CRITICAL severity findings are posted, up to a maximum of 10 issues per scan.
               </p>
               <div className="flex items-center gap-4 flex-wrap">
                 <button
@@ -735,10 +748,8 @@ export default function ScanPage({ params }: { params: { id: string } }) {
                     ✓ {issuesResult.issues_created} issue{issuesResult.issues_created !== 1 ? 's' : ''} created in {issuesResult.repo}
                   </span>
                 )}
-                {issuesResult && issuesResult.issues_created === -1 && (
-                  <span className="text-sm text-red-400 font-medium">
-                    ✗ Failed to create issues. Check that the repository is public.
-                  </span>
+                {issuesError && (
+                  <span className="text-sm text-red-400 font-medium">✗ {issuesError}</span>
                 )}
               </div>
             </div>

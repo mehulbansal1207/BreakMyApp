@@ -21,8 +21,6 @@ class GithubReportRequest(BaseModel):
     pr_number: int
 
 
-class GithubCreateIssuesRequest(BaseModel):
-    token: str
 
 
 @router.post("/report/{scan_id}")
@@ -79,7 +77,6 @@ async def post_github_report(
 @router.post("/scans/{scan_id}/create-issues")
 async def create_issues_for_scan(
     scan_id: UUID,
-    request: GithubCreateIssuesRequest,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -90,6 +87,9 @@ async def create_issues_for_scan(
         limit=5,
         window_seconds=3600,
     )
+
+    if not settings.GITHUB_TOKEN:
+        raise HTTPException(status_code=503, detail="GitHub integration not configured")
 
     # Fetch scan
     result = await db.execute(select(Scan).where(Scan.id == scan_id))
@@ -151,9 +151,9 @@ async def create_issues_for_scan(
         },
     }
 
-    # Create GitHub issues using the caller's own GitHub token
+    # Create GitHub issues using the server-side bot token
     issues_created = await create_github_issues(
-        token=request.token,
+        token=settings.GITHUB_TOKEN,
         owner=owner,
         repo=repo,
         scan_summary=scan_summary,
