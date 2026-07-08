@@ -61,3 +61,6 @@ backend/.cache/
 backend/firebase-service-account.json
 backend/celerybeat-schedule
 .claude/
+
+# Sandbox — sandbox_config.env is safe to commit (resource limits only, no secrets)
+# Do NOT add sandbox/sandbox_config.env to this list

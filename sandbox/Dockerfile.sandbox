@@ -1,0 +1,32 @@
+# =========================================================================
+# Dockerfile.sandbox — Minimal scan-runner image for sandboxed execution
+#
+# This image runs inside a gVisor (runsc) sandbox with read-only root fs.
+# It contains only the minimal tooling needed for scanning repos.
+# It does NOT contain application code, secrets, or production dependencies.
+#
+# Build:
+#   docker build -f sandbox/Dockerfile.sandbox -t breakmyapp-scan-runner:latest sandbox/
+# =========================================================================
+FROM python:3.11-slim
+
+# Install minimal tooling for scanning and verification tests
+# NOTE: dnsutils and iproute2 are included for verify_sandbox.sh network tests.
+#       They can be removed from production builds once verification passes.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    git \
+    ca-certificates \
+    dnsutils \
+    iproute2 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create sandbox user with explicit uid/gid so tmpfs mounts can reference them
+# uid=1000, gid=1000 — must match the tmpfs uid/gid in docker-compose.sandbox.yml
+RUN groupadd -g 1000 sandbox \
+    && useradd -u 1000 -g 1000 -r -d /workspace -s /sbin/nologin sandbox
+
+RUN mkdir -p /workspace && chown sandbox:sandbox /workspace
+
+USER sandbox
+WORKDIR /workspace

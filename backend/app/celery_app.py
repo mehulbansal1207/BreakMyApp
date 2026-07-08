@@ -27,6 +27,12 @@ celery_app.conf.update(
     task_acks_late=True,
     # Suppress CPendingDeprecationWarning about broker reconnect on startup
     broker_connection_retry_on_startup=True,
+    # Sandbox configuration (Phase 3a substrate)
+    # Used by the future dynamic scan task to enforce wall-clock timeout
+    # and select the gVisor runtime. Config only — no sandbox task yet.
+    sandbox_timeout=300,       # Wall-clock SIGKILL timeout in seconds
+    sandbox_runtime="runsc",   # Docker runtime for sandboxed containers
+
     # Periodic task: reap scans stuck at status="running" (worker died)
     beat_schedule={
         "reap-stale-scans": {

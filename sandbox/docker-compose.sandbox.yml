@@ -1,0 +1,74 @@
+# =========================================================================
+# docker-compose.sandbox.yml — Sandboxed scan execution environment
+#
+# IMPORTANT: This is a STANDALONE compose file. It is NOT merged into
+# docker-compose.prod.yml. It defines an isolated execution environment
+# for running untrusted user-uploaded code under gVisor.
+#
+# Usage:
+#   docker compose --env-file sandbox/sandbox_config.env -f sandbox/docker-compose.sandbox.yml up scan-runner
+#   docker compose --env-file sandbox/sandbox_config.env -f sandbox/docker-compose.sandbox.yml run --rm scan-runner <command>
+#
+# Resource limits use TOP-LEVEL Compose keys (mem_limit, cpus, pids_limit),
+# NOT deploy.resources.limits, because this stack runs via `docker compose up`,
+# not `docker stack deploy` (Swarm). deploy.resources.limits is silently
+# ignored under plain docker compose.
+# =========================================================================
+
+services:
+  scan-runner:
+    image: breakmyapp-scan-runner:latest
+    runtime: runsc
+    read_only: true
+
+    # --- Network isolation ---
+    # sandbox-net is internal: true (no outbound internet).
+    # This compose file does NOT reference the production app-network at all.
+    # The scan-runner cannot resolve or reach postgres, redis, backend, etc.
+    networks:
+      - sandbox-net
+
+    # --- Capability restrictions ---
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+    # --- Writable tmpfs mounts (read-only root fs requires these) ---
+    # /workspace is the Dockerfile's WORKDIR — must be writable for cloning
+    # repos and writing scan output. uid/gid=1000 matches the sandbox user.
+    tmpfs:
+      - /tmp:size=${SANDBOX_TMP_SIZE},noexec,nosuid
+      - /var/tmp:size=${SANDBOX_VAR_TMP_SIZE},noexec,nosuid
+      - /workspace:size=${SANDBOX_WORKSPACE_SIZE},noexec,nosuid,uid=1000,gid=1000
+
+    # --- Resource limits (top-level keys, honored by docker compose up) ---
+    # Memory: hard cap with NO swap (memswap_limit == mem_limit means 0 swap)
+    mem_limit: ${SANDBOX_MEMORY_LIMIT}
+    memswap_limit: ${SANDBOX_MEMORY_SWAP}
+
+    # CPU: hard cap
+    cpus: ${SANDBOX_CPU_LIMIT}
+
+    # PIDs: prevents fork bombs
+    pids_limit: ${SANDBOX_PID_LIMIT}
+
+    # --- Environment ---
+    # Only non-sensitive scan config. No env_file, no .env, no secrets.
+    environment:
+      - SCAN_TIMEOUT=${SCAN_TIMEOUT}
+
+    # NOTE: storage_opt (overlay disk cap) is intentionally omitted.
+    # DigitalOcean Ubuntu 22.04 droplets use ext4 by default, where
+    # storage_opt: size=XG is silently ignored. Disk limits are enforced
+    # via the capped tmpfs mounts above. If your droplet uses xfs+pquota,
+    # you can uncomment the following:
+    # storage_opt:
+    #   size: 1G
+
+networks:
+  sandbox-net:
+    driver: bridge
+    # internal: true means no outbound internet access.
+    # Containers on this network cannot reach external IPs or DNS.
+    internal: true
