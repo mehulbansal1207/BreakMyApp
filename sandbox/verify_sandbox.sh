@@ -43,7 +43,7 @@ COMMON_FLAGS=(
     --read-only
     --network=sandbox_sandbox-net
     --cap-drop=ALL
-    --security-opt=no-new-privileges:true
+    --security-opt=no-new-privileges=true
     --tmpfs "/tmp:size=${SANDBOX_TMP_SIZE},noexec,nosuid"
     --tmpfs "/var/tmp:size=${SANDBOX_VAR_TMP_SIZE},noexec,nosuid"
     --tmpfs "/workspace:size=${SANDBOX_WORKSPACE_SIZE},noexec,nosuid,uid=1000,gid=1000"
@@ -96,7 +96,7 @@ while True:
     if pid == 0:
         while True:
             pass
-" 2>&1)
+" 2>/dev/null)
 
 if [[ -z "$FORK_CID" ]] || [[ "$FORK_CID" == *"Error"* ]]; then
     log_fail "Fork bomb — failed to start container"
@@ -139,7 +139,7 @@ MEM_CID=$(docker run -d "${COMMON_FLAGS[@]}" "$IMAGE" python3 -c "
 chunks = []
 while True:
     chunks.append(b'X' * (10 * 1024 * 1024))
-" 2>&1)
+" 2>/dev/null)
 
 if [[ -z "$MEM_CID" ]] || [[ "$MEM_CID" == *"Error"* ]]; then
     log_fail "Memory bomb — failed to start container"
@@ -174,14 +174,30 @@ echo ""
 # =========================================================================
 # TEST 3: Infinite loop — wall-clock timeout kills it
 # =========================================================================
-# Kill with SIGKILL (not SIGTERM — hostile process could ignore SIGTERM)
+echo "--- Test 3: Infinite loop (wall-clock timeout) ---"
+
+TEST_TIMEOUT=15
+log_info "Starting infinite loop container (will SIGKILL after ${TEST_TIMEOUT}s)..."
+
+LOOP_CONTAINER=$(docker run -d "${COMMON_FLAGS[@]}" "$IMAGE" python3 -c "
+while True:
+    pass
+" 2>/dev/null)
+
+if [[ -z "$LOOP_CONTAINER" ]]; then
+    log_fail "Infinite loop — failed to start container"
+else
+    LOOP_START=$(date +%s)
+    log_info "Container ID: ${LOOP_CONTAINER:0:12}"
+    log_info "Waiting ${TEST_TIMEOUT}s before sending SIGKILL..."
+
+    sleep "$TEST_TIMEOUT"
+
     docker kill --signal=KILL "$LOOP_CONTAINER" >/dev/null 2>&1 || true
 
     LOOP_END=$(date +%s)
     LOOP_DURATION=$((LOOP_END - LOOP_START))
 
-    # Verify it's dead — poll briefly instead of a single sleep+check,
-    # SIGKILL delivery/cleanup can lag slightly under gVisor
     STILL_RUNNING="true"
     for i in 1 2 3 4 5; do
         sleep 1
@@ -193,12 +209,13 @@ echo ""
     done
 
     if [[ "$STILL_RUNNING" == "false" ]]; then
-        log_pass "Infinite loop — SIGKILL confirmed container dead after ${LOOP_DURATION}s (+"$i"s poll)"
+        log_pass "Infinite loop — SIGKILL confirmed container dead after ${LOOP_DURATION}s (+${i}s poll)"
     else
         log_fail "Infinite loop — container still running 5s after SIGKILL!"
         docker kill -s KILL "$LOOP_CONTAINER" >/dev/null 2>&1 || true
     fi
     docker rm -f "$LOOP_CONTAINER" >/dev/null 2>&1 || true
+fi
 
 # =========================================================================
 # TEST 4: Network exfiltration — outbound blocked (internal network)
