@@ -306,7 +306,7 @@ else
 fi
 
 # Also check dmesg
-DMESG_EVIDENCE=$(dmesg 2>/dev/null | grep -i "runsc\|gvisor\|sentry" | tail -5)
+DMESG_EVIDENCE=$(dmesg 2>/dev/null | grep -i "runsc\|gvisor\|sentry" | tail -5 || true)
 if [[ -n "$DMESG_EVIDENCE" ]]; then
     log_ok "gVisor evidence found in dmesg:"
     echo "$DMESG_EVIDENCE" | while IFS= read -r line; do
