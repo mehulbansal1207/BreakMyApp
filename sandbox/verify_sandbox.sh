@@ -360,17 +360,20 @@ else
 
     STATUS=$(docker inspect "$DISK_CID" --format '{{.State.Status}}' 2>/dev/null || echo "unknown")
     EXITCODE=$(docker inspect "$DISK_CID" --format '{{.State.ExitCode}}' 2>/dev/null || echo "unknown")
+    OOMKILLED=$(docker inspect "$DISK_CID" --format '{{.State.OOMKilled}}' 2>/dev/null || echo "unknown")
     DISK_OUTPUT=$(docker logs "$DISK_CID" 2>&1)
 
-    log_info "Status: $STATUS | ExitCode: $EXITCODE (after up to 30s)"
+    log_info "Status: $STATUS | ExitCode: $EXITCODE | OOMKilled: $OOMKILLED (after up to 30s)"
     log_info "Output: $(echo "$DISK_OUTPUT" | tail -3)"
 
-    if [[ "$STATUS" == "exited" ]] && [[ "$EXITCODE" != "0" ]] && echo "$DISK_OUTPUT" | grep -qiE "no space left|write failed|OSError"; then
-        log_pass "Disk fill — write failed (tmpfs cap enforced)"
-    elif echo "$DISK_OUTPUT" | grep -q "WARNING: wrote"; then
+    if echo "$DISK_OUTPUT" | grep -q "WARNING: wrote"; then
         log_fail "Disk fill — wrote full 4GB without hitting limit (tmpfs cap NOT enforced)"
+    elif [[ "$STATUS" == "exited" ]] && [[ "$EXITCODE" != "0" ]] && echo "$DISK_OUTPUT" | grep -qiE "no space left|write failed|OSError"; then
+        log_pass "Disk fill — write failed (tmpfs cap enforced, explicit disk-space error)"
+    elif [[ "$OOMKILLED" == "true" ]]; then
+        log_pass "Disk fill — write stopped via memory cgroup OOM kill (tmpfs is RAM-backed; write consumed memory cgroup budget before hitting a separate disk quota — host unaffected either way)"
     else
-        log_fail "Disk fill — inconclusive (status=$STATUS, exit=$EXITCODE) — did not clearly hit or clearly avoid the cap in 30s"
+        log_fail "Disk fill — inconclusive (status=$STATUS, exit=$EXITCODE, oomkilled=$OOMKILLED) — did not clearly hit or clearly avoid the cap in 30s"
     fi
 
     docker rm -f "$DISK_CID" >/dev/null 2>&1 || true
