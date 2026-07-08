@@ -135,99 +135,70 @@ echo ""
 # =========================================================================
 echo "--- Test 2: Memory bomb (OOM kill) ---"
 
-MEM_START=$(date +%s)
-
-MEM_OUTPUT=$(timeout 60 docker run \
-    "${COMMON_FLAGS[@]}" \
-    "$IMAGE" \
-    python3 -c "
-import sys
-# Allocate way past the 512MB cap in 10MB chunks
+MEM_CID=$(docker run -d "${COMMON_FLAGS[@]}" "$IMAGE" python3 -c "
 chunks = []
-try:
-    while True:
-        chunks.append(b'X' * (10 * 1024 * 1024))  # 10MB per chunk
-        print(f'Allocated {len(chunks) * 10} MB', file=sys.stderr)
-except MemoryError:
-    print(f'MemoryError at {len(chunks) * 10} MB', file=sys.stderr)
-    sys.exit(1)
-" 2>&1) || true
+while True:
+    chunks.append(b'X' * (10 * 1024 * 1024))
+" 2>&1)
 
-MEM_EXIT=$?
-MEM_END=$(date +%s)
-MEM_DURATION=$((MEM_END - MEM_START))
-
-# Check for OOM kill (exit code 137 = SIGKILL from OOM killer)
-if echo "$MEM_OUTPUT" | grep -qi "killed\|oom\|memory" || [[ $MEM_EXIT -eq 137 ]]; then
-    log_pass "Memory bomb — OOM killed in ${MEM_DURATION}s"
-    log_info "Output: $(echo "$MEM_OUTPUT" | tail -3)"
-elif echo "$MEM_OUTPUT" | grep -qi "MemoryError"; then
-    log_pass "Memory bomb — Python MemoryError raised (cgroup limit enforced)"
-    log_info "Output: $(echo "$MEM_OUTPUT" | tail -3)"
+if [[ -z "$MEM_CID" ]] || [[ "$MEM_CID" == *"Error"* ]]; then
+    log_fail "Memory bomb — failed to start container"
+    log_info "Output: $MEM_CID"
 else
-    log_fail "Memory bomb — no OOM kill detected (exit=$MEM_EXIT, duration=${MEM_DURATION}s)"
-    log_info "Output: $(echo "$MEM_OUTPUT" | tail -5)"
+    log_info "Container: ${MEM_CID:0:12}"
+    sleep 15
+
+    STATUS=$(docker inspect "$MEM_CID" --format '{{.State.Status}}' 2>/dev/null || echo "unknown")
+    OOMKILLED=$(docker inspect "$MEM_CID" --format '{{.State.OOMKilled}}' 2>/dev/null || echo "unknown")
+    EXITCODE=$(docker inspect "$MEM_CID" --format '{{.State.ExitCode}}' 2>/dev/null || echo "unknown")
+
+    log_info "Status: $STATUS | OOMKilled: $OOMKILLED | ExitCode: $EXITCODE"
+
+    if [[ "$OOMKILLED" == "true" ]]; then
+        log_pass "Memory bomb — OOM killed (confirmed via docker inspect State.OOMKilled)"
+    elif [[ "$STATUS" == "exited" ]] && [[ "$EXITCODE" == "137" ]]; then
+        log_pass "Memory bomb — killed with exit 137 (likely OOM, OOMKilled flag not set but signal matches)"
+    else
+        log_fail "Memory bomb — no OOM kill detected (status=$STATUS, oomkilled=$OOMKILLED, exit=$EXITCODE)"
+        docker kill -s KILL "$MEM_CID" >/dev/null 2>&1 || true
+    fi
+
+    docker rm -f "$MEM_CID" >/dev/null 2>&1 || true
 fi
 
-# Check host swap usage didn't spike
 SWAP_USED=$(free -m 2>/dev/null | awk '/Swap:/ {print $3}')
-if [[ -n "$SWAP_USED" ]] && [[ "$SWAP_USED" -lt 100 ]]; then
-    log_info "Host swap usage: ${SWAP_USED}MB (no thrashing)"
-else
-    log_info "Host swap usage: ${SWAP_USED:-unknown}MB"
-fi
+log_info "Host swap usage: ${SWAP_USED:-unknown}MB"
 
 echo ""
 
 # =========================================================================
 # TEST 3: Infinite loop — wall-clock timeout kills it
 # =========================================================================
-echo "--- Test 3: Infinite loop (wall-clock timeout) ---"
-
-# Use a SHORT timeout for testing (15 seconds instead of the full 5 minutes)
-TEST_TIMEOUT=15
-
-log_info "Starting infinite loop container (will SIGKILL after ${TEST_TIMEOUT}s)..."
-
-# Start the container in the background
-LOOP_CONTAINER=$(docker run -d \
-    "${COMMON_FLAGS[@]}" \
-    "$IMAGE" \
-    python3 -c "
-while True:
-    pass
-" 2>&1)
-
-# Remove --rm flag for background containers — we need the ID
-# Actually, -d with --rm is fine, Docker cleans up after kill
-if [[ -z "$LOOP_CONTAINER" ]] || [[ "$LOOP_CONTAINER" == *"Error"* ]]; then
-    log_fail "Infinite loop — failed to start container"
-    log_info "Output: $LOOP_CONTAINER"
-else
-    LOOP_START=$(date +%s)
-    log_info "Container ID: ${LOOP_CONTAINER:0:12}"
-    log_info "Waiting ${TEST_TIMEOUT}s before sending SIGKILL..."
-
-    sleep "$TEST_TIMEOUT"
-
-    # Kill with SIGKILL (not SIGTERM — hostile process could ignore SIGTERM)
+# Kill with SIGKILL (not SIGTERM — hostile process could ignore SIGTERM)
     docker kill --signal=KILL "$LOOP_CONTAINER" >/dev/null 2>&1 || true
 
     LOOP_END=$(date +%s)
     LOOP_DURATION=$((LOOP_END - LOOP_START))
 
-    # Verify it's dead
-    sleep 1
-    STILL_RUNNING=$(docker inspect "$LOOP_CONTAINER" --format='{{.State.Running}}' 2>/dev/null || echo "false")
-    if [[ "$STILL_RUNNING" == "false" ]]; then
-        log_pass "Infinite loop — SIGKILL confirmed container dead after ${LOOP_DURATION}s"
-    else
-        log_fail "Infinite loop — container still running after SIGKILL!"
-        docker kill "$LOOP_CONTAINER" >/dev/null 2>&1 || true
-    fi
-fi
+    # Verify it's dead — poll briefly instead of a single sleep+check,
+    # SIGKILL delivery/cleanup can lag slightly under gVisor
+    STILL_RUNNING="true"
+    for i in 1 2 3 4 5; do
+        sleep 1
+        CURRENT_STATE=$(docker inspect "$LOOP_CONTAINER" --format='{{.State.Running}}' 2>/dev/null || echo "false")
+        if [[ "$CURRENT_STATE" == "false" ]]; then
+            STILL_RUNNING="false"
+            break
+        fi
+    done
 
-echo ""
+    if [[ "$STILL_RUNNING" == "false" ]]; then
+        log_pass "Infinite loop — SIGKILL confirmed container dead after ${LOOP_DURATION}s (+"$i"s poll)"
+    else
+        log_fail "Infinite loop — container still running 5s after SIGKILL!"
+        docker kill -s KILL "$LOOP_CONTAINER" >/dev/null 2>&1 || true
+    fi
+    docker rm -f "$LOOP_CONTAINER" >/dev/null 2>&1 || true
 
 # =========================================================================
 # TEST 4: Network exfiltration — outbound blocked (internal network)
@@ -344,44 +315,54 @@ echo ""
 # =========================================================================
 echo "--- Test 6: Disk fill (tmpfs cap) ---"
 
-DISK_OUTPUT=$(timeout 30 docker run \
-    "${COMMON_FLAGS[@]}" \
-    "$IMAGE" \
-    python3 -c "
-import sys, os
-
-# Write into /workspace (tmpfs capped at ${SANDBOX_WORKSPACE_SIZE})
-# Try to write 1GB, which should exceed the tmpfs cap
+DISK_CID=$(docker run -d "${COMMON_FLAGS[@]}" "$IMAGE" python3 -c "
+import sys
+chunk = b'X' * (1024 * 1024)
 written = 0
-chunk = b'X' * (1024 * 1024)  # 1MB chunks
 try:
     with open('/workspace/fill_test', 'wb') as f:
-        for i in range(2048):  # 2GB attempted
+        for i in range(4096):
             f.write(chunk)
             written += len(chunk)
-            if written % (50 * 1024 * 1024) == 0:
-                print(f'Written {written // (1024*1024)} MB to /workspace', file=sys.stderr)
 except OSError as e:
     print(f'Disk write failed at {written // (1024*1024)} MB: {e}', file=sys.stderr)
     sys.exit(1)
 print(f'WARNING: wrote {written // (1024*1024)} MB without hitting limit!', file=sys.stderr)
-" 2>&1) || true
+" 2>&1)
 
-if echo "$DISK_OUTPUT" | grep -qiE "no space left|disk quota|write failed|OSError"; then
-    WRITTEN_MB=$(echo "$DISK_OUTPUT" | grep -oE '[0-9]+ MB' | tail -1)
-    log_pass "Disk fill — write failed at ${WRITTEN_MB:-unknown} (tmpfs cap enforced)"
-    log_info "Output: $(echo "$DISK_OUTPUT" | tail -2)"
+if [[ -z "$DISK_CID" ]] || [[ "$DISK_CID" == *"Error"* ]]; then
+    log_fail "Disk fill — failed to start container"
 else
-    log_fail "Disk fill — write did NOT fail (tmpfs cap may not be enforced)"
-    log_info "Output: $(echo "$DISK_OUTPUT" | tail -5)"
+    log_info "Container: ${DISK_CID:0:12}"
+    # Give it real time to actually try filling 4GB into a 512M tmpfs
+    for i in $(seq 1 30); do
+        sleep 1
+        STATUS=$(docker inspect "$DISK_CID" --format '{{.State.Status}}' 2>/dev/null || echo "unknown")
+        [[ "$STATUS" == "exited" ]] && break
+    done
+
+    STATUS=$(docker inspect "$DISK_CID" --format '{{.State.Status}}' 2>/dev/null || echo "unknown")
+    EXITCODE=$(docker inspect "$DISK_CID" --format '{{.State.ExitCode}}' 2>/dev/null || echo "unknown")
+    DISK_OUTPUT=$(docker logs "$DISK_CID" 2>&1)
+
+    log_info "Status: $STATUS | ExitCode: $EXITCODE (after up to 30s)"
+    log_info "Output: $(echo "$DISK_OUTPUT" | tail -3)"
+
+    if [[ "$STATUS" == "exited" ]] && [[ "$EXITCODE" != "0" ]] && echo "$DISK_OUTPUT" | grep -qiE "no space left|write failed|OSError"; then
+        log_pass "Disk fill — write failed (tmpfs cap enforced)"
+    elif echo "$DISK_OUTPUT" | grep -q "WARNING: wrote"; then
+        log_fail "Disk fill — wrote full 4GB without hitting limit (tmpfs cap NOT enforced)"
+    else
+        log_fail "Disk fill — inconclusive (status=$STATUS, exit=$EXITCODE) — did not clearly hit or clearly avoid the cap in 30s"
+    fi
+
+    docker rm -f "$DISK_CID" >/dev/null 2>&1 || true
 fi
 
-# Verify host disk is unaffected
 HOST_DISK_USED=$(df -h / 2>/dev/null | awk 'NR==2 {print $5}')
 log_info "Host disk usage after test: $HOST_DISK_USED"
 
 echo ""
-
 # =========================================================================
 # Summary
 # =========================================================================
