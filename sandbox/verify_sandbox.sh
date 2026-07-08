@@ -87,48 +87,45 @@ echo ""
 # =========================================================================
 # TEST 1: Fork bomb — PID limit must kill it, host stays responsive
 # =========================================================================
-echo "--- Test 1: Fork bomb (PID limit) ---"
+echo "--- Test 1: Fork bomb (PID limit / memory backstop) ---"
 
-FORK_START=$(date +%s)
+FORK_CID=$(docker run -d "${COMMON_FLAGS[@]}" "$IMAGE" python3 -c "
+import os, time
+while True:
+    pid = os.fork()
+    if pid == 0:
+        while True:
+            pass
+" 2>&1)
 
-# Use a Python fork bomb since bash may not be available or may behave
-# differently under gVisor. The PID limit should stop it cold.
-FORK_OUTPUT=$(timeout 30 docker run \
-    "${COMMON_FLAGS[@]}" \
-    "$IMAGE" \
-    python3 -c "
-import os, sys
-children = []
-try:
-    while True:
-        pid = os.fork()
-        if pid == 0:
-            # Child: spin forever
-            while True:
-                pass
-        else:
-            children.append(pid)
-except OSError as e:
-    print(f'Fork failed after {len(children)} children: {e}', file=sys.stderr)
-    sys.exit(1)
-" 2>&1) || true
-
-FORK_END=$(date +%s)
-FORK_DURATION=$((FORK_END - FORK_START))
-
-# The container should have been killed or exited with error
-if [[ $FORK_DURATION -lt 30 ]]; then
-    log_pass "Fork bomb — contained in ${FORK_DURATION}s (PID limit killed it)"
-    log_info "Output: $(echo "$FORK_OUTPUT" | tail -2)"
+if [[ -z "$FORK_CID" ]] || [[ "$FORK_CID" == *"Error"* ]]; then
+    log_fail "Fork bomb — failed to start container"
+    log_info "Output: $FORK_CID"
 else
-    log_fail "Fork bomb — ran for ${FORK_DURATION}s without being killed"
-fi
+    log_info "Container: ${FORK_CID:0:12}"
+    sleep 20
 
-# Verify host is still responsive
-if echo "host alive" >/dev/null 2>&1; then
-    log_info "Host confirmed responsive after fork bomb"
-else
-    log_fail "Fork bomb — host unresponsive!"
+    STATUS=$(docker inspect "$FORK_CID" --format '{{.State.Status}}' 2>/dev/null || echo "unknown")
+    OOMKILLED=$(docker inspect "$FORK_CID" --format '{{.State.OOMKilled}}' 2>/dev/null || echo "unknown")
+    EXITCODE=$(docker inspect "$FORK_CID" --format '{{.State.ExitCode}}' 2>/dev/null || echo "unknown")
+
+    log_info "Status: $STATUS | OOMKilled: $OOMKILLED | ExitCode: $EXITCODE"
+
+    if [[ "$STATUS" == "exited" ]]; then
+        log_pass "Fork bomb — container terminated (status=$STATUS, oomkilled=$OOMKILLED, exit=$EXITCODE)"
+    else
+        log_fail "Fork bomb — container still running after 20s, resource limits did not contain it"
+        docker kill -s KILL "$FORK_CID" >/dev/null 2>&1 || true
+    fi
+
+    HOST_RESPONSIVE=$(timeout 5 echo "alive" 2>&1)
+    if [[ "$HOST_RESPONSIVE" == "alive" ]]; then
+        log_info "Host confirmed responsive after fork bomb"
+    else
+        log_fail "Fork bomb — host unresponsive!"
+    fi
+
+    docker rm -f "$FORK_CID" >/dev/null 2>&1 || true
 fi
 
 echo ""
