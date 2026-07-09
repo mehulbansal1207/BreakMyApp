@@ -103,7 +103,7 @@ if [[ -z "$FORK_CID" ]] || [[ "$FORK_CID" == *"Error"* ]]; then
     log_info "Output: $FORK_CID"
 else
     log_info "Container: ${FORK_CID:0:12}"
-    sleep 20
+    sleep 60
 
     STATUS=$(docker inspect "$FORK_CID" --format '{{.State.Status}}' 2>/dev/null || echo "unknown")
     OOMKILLED=$(docker inspect "$FORK_CID" --format '{{.State.OOMKilled}}' 2>/dev/null || echo "unknown")
