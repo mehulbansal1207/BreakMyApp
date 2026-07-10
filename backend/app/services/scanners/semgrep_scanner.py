@@ -61,6 +61,12 @@ def scan_semgrep(repo_path: str) -> Dict[str, Any]:
                 "--exclude", "*.min.js",
                 "--exclude", "*.min.css",
                 "--exclude", "vendor",
+                # test_fixtures/ contains intentionally-vulnerable code for
+                # the custom scanner's regression suite (run_fixture_tests.py).
+                # Must not be interpreted as production vulnerabilities when
+                # found in ANY repo being scanned, including BreakMyApp's own.
+                "--exclude", "test_fixtures",
+                "--exclude", "*_vulnerable.*",
             ],
             capture_output=True,
             text=True,

@@ -51,7 +51,14 @@ def scan_bandit(repo_path: str, repo_url: str = "") -> Dict[str, Any]:
     try:
         logger.info(f"Starting Bandit scan on {repo_path}")
         process = subprocess.run(
-            ["bandit", "-r", repo_path, "-f", "json", "-q"],
+            [
+                "bandit", "-r", repo_path, "-f", "json", "-q",
+                # test_fixtures/ contains intentionally-vulnerable code for
+                # the custom scanner's regression suite (run_fixture_tests.py).
+                # Must not be flagged as production vulnerabilities when found
+                # in ANY repo being scanned, including BreakMyApp's own.
+                "--exclude", os.path.join(repo_path, "test_fixtures"),
+            ],
             capture_output=True,
             text=True,
             timeout=120

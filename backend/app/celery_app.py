@@ -6,7 +6,7 @@ celery_app = Celery(
     "breakmyapp",
     broker=settings.REDIS_URL,
     backend=settings.REDIS_URL,
-    include=["app.tasks.analysis", "app.tasks.reaper"]
+    include=["app.tasks.analysis", "app.tasks.reaper", "app.tasks.dynamic_scan"]
 )
 
 # Apply settings configuration

@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String
+from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -53,6 +53,17 @@ class Scan(Base):
 
     # Current step of the scan
     current_step: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
+
+    # Dynamic scan results (Phase 3b — Python app-runner)
+    # Status: "skipped" | "install_failed" | "start_failed" | "success" | null (not run yet)
+    dynamic_scan_status: Mapped[Optional[str]] = mapped_column(
+        String(32), nullable=True, default=None
+    )
+
+    # Detailed output/error message from the dynamic scan pipeline
+    dynamic_scan_detail: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True, default=None
+    )
 
     # Timestamps with timezone
     created_at: Mapped[datetime] = mapped_column(

@@ -31,7 +31,12 @@ def scan_secrets(repo_path: str) -> Dict[str, Any]:
             "node_modules",
             ".git",
             "__pycache__",
-            r".*\.pyc"
+            r".*\.pyc",
+            # test_fixtures/ contains intentionally-vulnerable code for the
+            # custom scanner's regression suite.  Must not be interpreted as
+            # real secrets when found in ANY repo being scanned.
+            r"test_fixtures",
+            r".*_vulnerable\.py",
         ])
         process = subprocess.run(
             [

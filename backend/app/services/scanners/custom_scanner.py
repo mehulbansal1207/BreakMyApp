@@ -385,6 +385,16 @@ def scan_custom(repo_path: str) -> Dict[str, Any]:
                     "--exclude", "build",
                     "--exclude", "__pycache__",
                     "--exclude", "*.min.js",
+                    # test_fixtures/ contains intentionally-vulnerable code
+                    # that IS this scanner's own regression suite (see
+                    # run_fixture_tests.py).  When scan_custom() runs as part
+                    # of the SCAN PIPELINE (user submits a repo URL), these
+                    # fixtures must NOT inflate the vulnerability count.
+                    # run_fixture_tests.py invokes semgrep directly against
+                    # the fixture files — it does not call scan_custom() —
+                    # so this exclusion has zero impact on regression testing.
+                    "--exclude", "test_fixtures",
+                    "--exclude", "*_vulnerable.*",
                 ],
                 capture_output=True,
                 text=True,
